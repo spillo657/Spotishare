@@ -1,7 +1,14 @@
-import { redirect } from "next/navigation";
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/login',
+        permanent: false, // Mettiamo false così il tuo browser non lo memorizza in modo permanente mentre facciamo i test
+      },
+    ]
+  },
+};
 
-export const dynamic = "force-dynamic"; // Forza Next.js a non usare la memoria vecchia
-
-export default function Home() {
-  redirect("/login");
-}
+export default nextConfig;
