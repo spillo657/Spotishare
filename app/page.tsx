@@ -9,8 +9,8 @@ export default function Home() {
   }, [router]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#121212]">
-      <p className="text-white">Caricamento in corso...</p>
+    <div style={{ backgroundColor: '#000', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: '#fff' }}>Caricamento in corso...</p>
     </div>
   );
 }
