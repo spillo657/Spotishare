@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../../utils/supabase'
-import OneSignal from 'react-onesignal' // IMPORT ONESIGNAL AGGIUNTO
+import OneSignal from 'react-onesignal'
 
 export default function Dashboard() {
     // --- STATI PRINCIPALI ---
@@ -96,12 +96,12 @@ export default function Dashboard() {
         const setupOneSignal = async (userId: string) => {
             try {
                 await OneSignal.init({
-                    appId: "a392ce28-3295-4c14-b7a7-cf7833e00720", // SOSTITUISCI CON IL TUO APP ID!
+                    appId: "a392ce28-3295-4c14-b7a7-cf7833e00720",
                     allowLocalhostAsSecureOrigin: true
                 });
 
-                // Chiede il permesso per le notifiche
-                await OneSignal.Slidedown.promptPush();
+                // Abbiamo rimosso OneSignal.Slidedown.promptPush()
+                // La campanella (se attivata dal sito OneSignal) apparirà da sola in base alle regole impostate lì.
 
                 // Ascolta quando l'utente accetta
                 OneSignal.User.PushSubscription.addEventListener('change', async (subscription) => {
