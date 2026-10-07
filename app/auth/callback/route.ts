@@ -7,7 +7,12 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/dashboard'
 
   if (code) {
-    const response = NextResponse.redirect(`${origin}${next}`)
+    // We use a temporary response to capture cookies set by the Supabase client
+    const tempResponse = NextResponse.next({
+      request: {
+        headers: request.headers,
+      },
+    })
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,7 +24,8 @@ export async function GET(request: NextRequest) {
           },
           setAll(cookiesToSet) {
             cookiesToSet.forEach(({ name, value, options }) => {
-              response.cookies.set(name, value, options)
+              request.cookies.set(name, value)
+              tempResponse.cookies.set(name, value, options)
             })
           },
         },
@@ -27,11 +33,22 @@ export async function GET(request: NextRequest) {
     )
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
+
     if (!error) {
-      return response
+      // Final redirect response
+      const redirectResponse = NextResponse.redirect(`${origin}${next}`)
+
+      // Explicitly copy all cookies from the session exchange into the final redirect
+      const allCookies = tempResponse.cookies.getAll()
+      allCookies.forEach(cookie => {
+        redirectResponse.cookies.set(cookie.name, cookie.value)
+      })
+
+      return redirectResponse
     }
 
     console.error('Auth exchange error:', error)
+    return NextResponse.redirect(`${origin}/login?error=auth-failed`)
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth-failed`)
