@@ -27,9 +27,10 @@ export default function JoinPlanPage() {
           .from('plans')
           .select('id, name, max_members')
           .eq('invite_code', code)
-          .single();
+          .maybeSingle();
 
         if (planError || !plan) {
+          console.error('Plan search error:', planError);
           setStatus('invalid');
           setLoading(false);
           return;
@@ -83,7 +84,7 @@ export default function JoinPlanPage() {
     }
 
     handleJoin();
-  }, [params, router, showToast]);
+  }, [params.code, router, showToast]);
 
   if (loading) {
     return (
