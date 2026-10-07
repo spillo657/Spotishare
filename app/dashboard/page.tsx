@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../utils/supabase'
 import { useToast } from '@/components/ToastContext'
+// OneSignal rimosso da qui perché ora è gestito globalmente in layout.tsx
 
 export default function Dashboard() {
     // --- STATI PRINCIPALI ---
@@ -42,11 +43,12 @@ export default function Dashboard() {
     // --- LOGICA DEL COUNTER (SCADENZA AL 24) ---
     const getDeadlineInfo = () => {
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0); // Reset orario per calcolo giorni esatti
 
         let targetMonth = today.getMonth();
         let targetYear = today.getFullYear();
 
+        // Se oggi è oltre il 24, puntiamo al 24 del mese prossimo
         if (today.getDate() > 24) {
             targetMonth += 1;
             if (targetMonth > 11) {
@@ -127,6 +129,7 @@ export default function Dashboard() {
         })
     }, [])
 
+    // --- CONTROLLO MESI PAGATI ---
     const checkMonthPaid = (monthIndex: number, targetYear: number, userPayments: any[]) => {
         return userPayments.some(p => {
             if (p.target_month !== undefined && p.target_month !== null) {
@@ -144,6 +147,7 @@ export default function Dashboard() {
         const currentYear = today.getFullYear();
         const currentMonth = today.getMonth();
 
+        // Consideramos pagati i mesi da Gennaio fino al mese corrente
         for (let i = 0; i <= currentMonth; i++) {
             if (!checkMonthPaid(i, currentYear, userPayments)) {
                 unpaidMonths++;
@@ -151,6 +155,49 @@ export default function Dashboard() {
         }
         return unpaidMonths;
     };
+
+    // --- AZIONI DATABASE CON MODAL ---
+    const createPlan = async (cost: number, maxMembers: number) => {
+        try {
+            setIsPaying(true);
+            const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const { data: planData, error: planError } = await supabase
+                .from('plans')
+                .insert({
+                    name: `${user?.user_metadata?.full_name || 'Il Mio'} Gruppo`,
+                    monthly_cost: cost,
+                    max_members: maxMembers,
+                    invite_code: inviteCode
+                })
+                .select()
+                .single();
+
+            if (planError) throw planError;
+
+            const { error: userError } = await supabase
+                .from('users')
+                .update({ plan_id: planData.id, role: 'admin' })
+                .eq('id', user.id);
+
+            if (userError) throw userError;
+
+            showToast("🚀 Gruppo creato con successo!", 'success');
+            setUserPlanId(planData.id);
+            setUserRole('admin');
+            setPlans([planData, ...plans]);
+
+            const { data: membersData } = await supabase.from('users').select('*').eq('plan_id', planData.id);
+            if (membersData) setMembers(membersData);
+
+            const { data: paymentsData } = await supabase.from('payments').select(`*, users ( name )`).eq('plan_id', planData.id).order('payment_date', { ascending: false });
+            if (paymentsData) setAllGroupPayments(paymentsData);
+
+        } catch (error: any) {
+            showToast("Errore creazione gruppo: " + error.message, 'error');
+        } finally {
+            setIsPaying(false);
+        }
+    }
 
     const requestPayment = () => {
         const currentPlan = plans.find(p => p.id === userPlanId)
@@ -626,10 +673,59 @@ export default function Dashboard() {
                             <p className="text-zinc-400 font-medium">
                                 {loadingPlans ? 'Sincronizzazione dashboard...' : 'Nessun piano associato trovato.'}
                             </p>
+                            {userRole === 'admin' && !userPlanId && (
+                                <div className="mt-6 p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md max-w-md">
+                                    <h3 className="text-xl font-bold text-zinc-100 mb-2">Crea il tuo Gruppo</h3>
+                                    <p className="text-sm text-zinc-400 mb-6">Sei l'amministratore ma non hai ancora un gruppo. Creane uno ora per iniziare a invitare i membri.</p>
+                                    <div className="flex flex-col gap-4">
+                                        <div className="flex gap-3">
+                                            <div className="flex-grow text-left">
+                                                <label className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 ml-1">Costo Mensile (€)</label>
+                                                <input
+                                                    type="number"
+                                                    placeholder="es. 15.00"
+                                                    id="newPlanCost"
+                                                    className="w-full bg-black/40 border border-white/10 text-zinc-100 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50"
+                                                />
+                                            </div>
+                                            <div className="w-32 text-left">
+                                                <label className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 ml-1">Membri Max</label>
+                                                <input
+                                                    type="number"
+                                                    placeholder="6"
+                                                    id="newPlanMax"
+                                                    className="w-full bg-black/40 border border-white/10 text-zinc-100 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50"
+                                                />
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={async () => {
+                                                const cost = parseFloat((document.getElementById('newPlanCost') as HTMLInputElement).value);
+                                                const max = parseInt((document.getElementById('newPlanMax') as HTMLInputElement).value);
+                                                if (isNaN(cost) || isNaN(max)) {
+                                                    showToast("Inserisci valori validi", "error");
+                                                    return;
+                                                }
+                                                await createPlan(cost, max);
+                                            }}
+                                            className="bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black font-bold py-3 rounded-xl hover:scale-[1.02] transition-all shadow-lg shadow-green-500/20"
+                                        >
+                                            Crea Gruppo Ora
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    )}
-                </main>
-            </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-20 text-center">
+                            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4 animate-bounce">⏳</div>
+                            <p className="text-zinc-400 font-medium">
+                                {loadingPlans ? 'Sincronizzazione dashboard...' : 'Nessun piano associato trovato.'}
+                            </p>
+                        </div>
+                    )
+                }
+            </main>
         </div>
     )
 }
