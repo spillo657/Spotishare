@@ -11,10 +11,17 @@ export default function AuthCallback() {
     // Handle the callback from Supabase OAuth
     const handleAuthCallback = async () => {
       try {
+        const searchParams = new URLSearchParams(window.location.search);
+        const code = searchParams.get('code');
+
+        if (!code) {
+          console.error('No code found in URL');
+          router.push('/login');
+          return;
+        }
+
         // Exchange the code for a session
-        const { data, error } = await supabase.auth.exchangeCodeForSession(
-          window.location.search
-        );
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (error) {
           console.error('Error exchanging code for session:', error);

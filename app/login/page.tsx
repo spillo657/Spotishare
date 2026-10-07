@@ -17,7 +17,7 @@ export default function Login() {
                 provider: 'spotify',
                 options: {
                     skipBrowserRedirect: true,
-                    redirectTo: `${window.location.origin}/dashboard`
+                    redirectTo: `${window.location.origin}/auth/callback`
                 }
             })
 
