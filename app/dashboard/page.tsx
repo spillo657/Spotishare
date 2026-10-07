@@ -265,13 +265,17 @@ export default function Dashboard() {
     const myPlan = plans.find(p => p.id === userPlanId)
 
     return (
-        <div className="min-h-screen bg-[#121212] text-white p-8 font-sans relative">
-            <div className="max-w-5xl mx-auto">
+        <div className="min-h-screen bg-[#121212] text-white p-8 font-sans relative overflow-hidden">
+            {/* Ambient Background Glows */}
+            <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#1DB954]/5 rounded-full blur-[120px] pointer-events-none"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-red-500/5 rounded-full blur-[120px] pointer-events-none"></div>
+
+            <div className="max-w-5xl mx-auto relative z-10">
 
                 {/* --- BANNER PROMEMORIA --- */}
                 {deadline.isReminderActive && (
-                    <div className="mb-6 bg-yellow-500/10 border border-yellow-500/50 p-4 rounded-xl flex items-center gap-4 animate-pulse">
-                        <span className="text-2xl font-bold text-yellow-500">🔔</span>
+                    <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-2xl flex items-center gap-4 animate-pulse backdrop-blur-md">
+                        <span className="text-2xl">🔔</span>
                         <div>
                             <p className="font-bold text-yellow-500">Scadenza Imminente</p>
                             <p className="text-sm text-yellow-200/80">Il rinnovo Spotify è tra {deadline.daysLeft} {deadline.daysLeft === 1 ? 'giorno' : 'giorni'}. Assicurati di avere fondi sulla carta!</p>
@@ -279,16 +283,18 @@ export default function Dashboard() {
                     </div>
                 )}
 
-                <header className="flex justify-between items-center mb-10 border-b border-[#282828] pb-6">
-                    <h1 className="text-3xl font-bold text-[#1DB954]">SpotiShare</h1>
+                <header className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
+                    <h1 className="text-3xl font-black text-white tracking-tight">
+                        Spoti<span className="text-[#1DB954]">Share</span>
+                    </h1>
                     {user && (
                         <div className="text-right">
                             <p className="font-bold flex items-center justify-end gap-2">
-                                <a href="/profile" className="hover:text-[#1DB954] transition-colors">
+                                <a href="/profile" className="hover:text-[#1DB954] transition-colors text-white/90">
                                     {user.user_metadata?.full_name || 'Utente'}
                                 </a>
                                 {userRole === 'admin' && (
-                                    <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider">Admin</span>
+                                    <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Admin</span>
                                 )}
                             </p>
                             <p className="text-xs text-[#B3B3B3] flex items-center justify-end gap-1">
@@ -304,19 +310,19 @@ export default function Dashboard() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
 
                                 {/* --- LA TUA CASSA --- */}
-                                <div className="bg-[#181818] p-6 rounded-2xl border border-[#282828] relative overflow-hidden shadow-2xl flex flex-col justify-between">
+                                <div className="bg-[#181818]/60 backdrop-blur-xl p-6 rounded-3xl border border-white/5 relative overflow-hidden shadow-2xl flex flex-col justify-between transition-all hover:border-white/10">
                                     {/* EFFETTO SFONDO COUNTER */}
                                     <div className={`absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-20 ${deadline.daysLeft <= 3 ? 'bg-red-500' : 'bg-[#1DB954]'}`}></div>
 
                                     <div className="relative z-10">
-                                        <h2 className="text-xl font-bold text-[#B3B3B3] mb-6 flex justify-between items-center">
+                                        <h2 className="text-xl font-bold text-white/70 mb-6 flex justify-between items-center">
                                             La tua Cassa
-                                            <span className="text-xs bg-[#282828] px-3 py-1 rounded-full text-white border border-[#3E3E3E]">Tot: €{totalUserPaid.toFixed(2)}</span>
+                                            <span className="text-xs bg-white/10 px-3 py-1 rounded-full text-white border border-white/10">Tot: €{totalUserPaid.toFixed(2)}</span>
                                         </h2>
 
                                         {/* COUNTER VISIVO */}
                                         <div className="flex items-center gap-6 mb-8">
-                                            <div className={`w-24 h-24 rounded-2xl flex flex-col items-center justify-center border-2 shadow-lg transition-all
+                                            <div className={`w-24 h-24 rounded-3xl flex flex-col items-center justify-center border-2 shadow-lg transition-all
                                                 ${deadline.daysLeft <= 3 ? 'border-red-500 bg-red-500/10' : 'border-[#1DB954] bg-[#1DB954]/10'}`}>
                                                 <span className={`text-4xl font-black ${deadline.daysLeft <= 3 ? 'text-red-500' : 'text-[#1DB954]'}`}>
                                                     {deadline.daysLeft}
@@ -324,15 +330,15 @@ export default function Dashboard() {
                                                 <span className="text-[10px] uppercase font-bold text-[#B3B3B3]">Giorni</span>
                                             </div>
 
-                                            <div>
-                                                <p className="text-[#B3B3B3] text-sm uppercase tracking-widest font-bold">Prossima Scadenza</p>
+                                            <div className="flex-grow">
+                                                <p className="text-[#B3B3B3] text-xs uppercase tracking-widest font-bold">Prossima Scadenza</p>
                                                 <p className="text-2xl font-black text-white">{deadline.dateString}</p>
                                                 <p className="text-xs text-[#B3B3B3] mt-1 italic">Quota: €{(myPlan.monthly_cost / myPlan.max_members).toFixed(2)}</p>
                                             </div>
                                         </div>
 
                                         {/* SEZIONE DEBITO */}
-                                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+                                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl backdrop-blur-sm">
                                             <div className="flex justify-between items-center">
                                                 <span className="text-xs font-bold text-red-400 uppercase">Situazione Debiti</span>
                                                 <span className={`text-sm font-bold ${calculateUserDebt(user?.id, payments) > 0 ? 'text-red-500' : 'text-[#1DB954]'}`}>
@@ -343,27 +349,562 @@ export default function Dashboard() {
                                             </div>
                                         </div>
 
-                                        {/* SELETTORE MESE E PAGAMENTO CON ANNI DINAMICI */}
-                                        <div className="space-y-4 pt-4 border-t border-[#282828]">
+                                        {/* SELETTORE MESE E PAGAMENTO */}
+                                        <div className="space-y-4 pt-6 border-t border-white/10">
                                             <div className="flex flex-col gap-2">
-                                                <label className="text-xs font-bold text-[#B3B3B3] uppercase">Mese da saldare:</label>
+                                                <label className="text-xs font-bold text-[#B3B3B3] uppercase ml-1">Mese da saldare:</label>
                                                 <div className="flex gap-2">
                                                     <select
                                                         value={selectedTargetMonth}
                                                         onChange={(e) => setSelectedTargetMonth(Number(e.target.value))}
-                                                        className="flex-grow bg-[#121212] border border-[#3E3E3E] text-white rounded-xl p-3 outline-none focus:border-[#1DB954]"
+                                                        className="flex-grow bg-black/40 border border-white/10 text-white rounded-2xl p-3 outline-none focus:border-[#1DB954] transition-colors"
                                                     >
                                                         {mesi.map((m, i) => <option key={i} value={i}>{m}</option>)}
                                                     </select>
                                                     <select
                                                         value={selectedTargetYear}
                                                         onChange={(e) => setSelectedTargetYear(Number(e.target.value))}
-                                                        className="w-24 bg-[#121212] border border-[#3E3E3E] text-white rounded-xl p-3 outline-none focus:border-[#1DB954]"
+                                                        className="w-24 bg-black/40 border border-white/10 text-white rounded-2xl p-3 outline-none focus:border-[#1DB954] transition-colors"
                                                     >
                                                         {availableYears.map(year => (
                                                             <option key={year} value={year}>{year}</option>
                                                         ))}
                                                     </select>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onClick={requestPayment}
+                                                disabled={isPaying}
+                                                className="w-full bg-[#1DB954] text-black font-black py-4 rounded-2xl hover:scale-[1.02] transition-all shadow-lg shadow-[#1DB954]/20 disabled:opacity-50 disabled:hover:scale-100"
+                                            >
+                                                {isPaying ? 'ELABORAZIONE...' : `REGISTRA PAGAMENTO ${mesiCorti[selectedTargetMonth].toUpperCase()}`}
+                                            </button>
+                                        </div>
+
+                                        {/* GRAFICA 12 MESI */}
+                                        <h3 className="font-bold text-xs text-white/50 uppercase tracking-wider mt-8 mb-4 border-b border-white/10 pb-2">Status Pagamenti {selectedTargetYear}</h3>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {mesiCorti.map((mese, index) => {
+                                                const isPaid = checkMonthPaid(index, selectedTargetYear, payments);
+                                                const isCurrentMonth = new Date().getMonth() === index && currentYear === selectedTargetYear;
+
+                                                return (
+                                                    <div
+                                                        key={mese}
+                                                        className={`p-2 rounded-xl border text-center flex flex-col items-center justify-center transition-all ${isPaid
+                                                            ? 'bg-[#1DB954]/20 border-[#1DB954] text-[#1DB954]'
+                                                            : isCurrentMonth
+                                                                ? 'bg-white/5 border-yellow-500 text-yellow-500'
+                                                                : 'bg-black/20 border-white/10 text-[#555555]'
+                                                            }`}
+                                                    >
+                                                        <span className="text-[10px] uppercase font-bold mb-1">{mese}</span>
+                                                        <span className="text-lg">{isPaid ? '✅' : isCurrentMonth ? '🔔' : '⏳'}</span>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* --- IL GRUPPO --- */}
+                                <div>
+                                    <h2 className="text-2xl font-black mb-6 text-white/90">Membri del Gruppo</h2>
+                                    <div className="bg-[#181818]/60 backdrop-blur-xl p-3 rounded-3xl border border-white/5 shadow-2xl">
+                                        <ul className="divide-y divide-white/5">
+                                            {members.map((member) => (
+                                                <li key={member.id} className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors rounded-2xl group">
+                                                    <div className="w-12 h-12 rounded-full bg-white/10 border border-white/10 text-[#1DB954] flex items-center justify-center font-bold text-xl shadow-inner group-hover:scale-110 transition-transform">
+                                                        {member.name ? member.name.charAt(0).toUpperCase() : '?'}
+                                                    </div>
+                                                    <div className="flex-grow">
+                                                        <p className="font-bold text-lg flex items-center gap-2">
+                                                            {member.name} {member.id === user?.id && <span className="text-[#1DB954] text-[10px] border border-[#1DB954] px-2 py-0.5 rounded-full font-bold uppercase">Tu</span>}
+                                                        </p>
+                                                        <p className="text-[#B3B3B3] text-sm">{member.email}</p>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* --- SEZIONE ADMIN --- */}
+                            {userRole === 'admin' && (
+                                <div className="mt-12 pt-12 border-t border-white/10 relative">
+                                    <div className="absolute -top-px left-0 w-full h-px bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
+                                    <div className="flex justify-between items-center mb-8">
+                                        <h2 className="text-2xl font-black text-red-500 flex items-center gap-2">
+                                            🛡️ Pannello Amministratore
+                                        </h2>
+                                        <div className="bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-2xl backdrop-blur-md">
+                                            <span className="text-sm text-[#B3B3B3] mr-2">Cassa Totale:</span>
+                                            <span className="text-xl font-bold text-white">€{totalGroupPaid.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="bg-[#181818]/60 backdrop-blur-xl p-6 rounded-3xl border border-red-500/20 shadow-xl">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h3 className="font-bold text-lg text-white">Gestione Piano</h3>
+                                                <button
+                                                    onClick={() => {
+                                                        setIsManagingPlan(!isManagingPlan);
+                                                        if(!isManagingPlan) {
+                                                            setPlanCost(myPlan?.monthly_cost.toString() || '');
+                                                            setPlanMaxMembers(myPlan?.max_members.toString() || '');
+                                                        }
+                                                    }}
+                                                    className="text-xs text-[#1DB954] font-bold hover:underline"
+                                                >
+                                                    {isManagingPlan ? 'Annulla' : 'Modifica'}
+                                                </button>
+                                            </div>
+
+                                            {isManagingPlan ? (
+                                                <div className="space-y-4">
+                                                    <div className="flex flex-col gap-2">
+                                                        <label className="text-xs font-bold text-[#B3B3B3] uppercase">Costo Mensile (€)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={planCost}
+                                                            onChange={(e) => setPlanCost(e.target.value)}
+                                                            className="bg-black/40 border border-white/10 text-white rounded-xl p-3 outline-none focus:border-[#1DB954] transition-colors"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col gap-2">
+                                                        <label className="text-xs font-bold text-[#B3B3B3] uppercase">Membri Max</label>
+                                                        <input
+                                                            type="number"
+                                                            value={planMaxMembers}
+                                                            onChange={(e) => setPlanMaxMembers(e.target.value)}
+                                                            className="bg-black/40 border border-white/10 text-white rounded-xl p-3 outline-none focus:border-[#1DB954] transition-colors"
+                                                        />
+                                                    </div>
+                                                    <button
+                                                        onClick={updatePlanDetails}
+                                                        className="w-full bg-[#1DB954] text-black font-bold py-3 rounded-xl hover:bg-[#1ed760] transition-colors"
+                                                    >
+                                                        Salva Modifiche
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-[#B3B3B3]">Costo Mensile:</span>
+                                                        <span className="font-bold text-white">€{myPlan?.monthly_cost.toFixed(2)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-[#B3B3B3]">Membri Max:</span>
+                                                        <span className="font-bold text-white">{myPlan?.max_members}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="mt-8 pt-6 border-t border-white/10">
+                                                <h3 className="font-bold text-lg mb-2 text-white">Registra Incasso Manuale</h3>
+                                                <p className="text-sm text-[#B3B3B3] mb-4">Segna i pagamenti contanti per {mesi[selectedTargetMonth]} {selectedTargetYear}.</p>
+                                                <ul className="space-y-3">
+                                                    {members.map(member => (
+                                                        <li key={member.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                                                            <span className="font-medium text-white/90">{member.name}</span>
+                                                            <button
+                                                                onClick={() => requestAdminAddPayment(member.id, member.name)}
+                                                                className="text-xs bg-transparent border border-[#1DB954] text-[#1DB954] font-bold px-3 py-1.5 rounded-full hover:bg-[#1DB954] hover:text-black transition-colors"
+                                                            >
+                                                                + Segna Pagato
+                                                            </button>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-[#181818]/60 backdrop-blur-xl p-6 rounded-3xl border border-red-500/20 shadow-xl flex flex-col justify-between">
+                                            <div className="relative z-10">
+                                                <h3 className="font-bold text-lg mb-4 text-white">Invita nuovi Membri</h3>
+                                                <p className="text-sm text-[#B3B3B3] mb-4">Condividi questo link per permettere ad altri di unirsi al tuo gruppo.</p>
+                                                <div className="flex items-center gap-2 bg-black/40 p-3 rounded-2xl border border-white/10">
+                                                    <code className="flex-grow text-[#1DB954] font-mono text-sm truncate">
+                                                        {`${window.location.origin}/join/${myPlan?.invite_code || 'generazione...'}`}
+                                                    </code>
+                                                    <button
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(`${window.location.origin}/join/${myPlan?.invite_code}`);
+                                                            showToast("Link copiato negli appunti!", "success");
+                                                        }}
+                                                        className="bg-[#1DB954] text-black text-xs font-bold px-3 py-2 rounded-xl hover:bg-[#1ed760] transition-colors"
+                                                    >
+                                                        Copia
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="mt-8">
+                                                <h3 className="font-bold text-lg mb-4 text-white">Storico Generale</h3>
+                                                {allGroupPayments.length > 0 ? (
+                                                    <ul className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                                        {allGroupPayments.map(payment => (
+                                                            <li key={payment.id} className="flex justify-between items-center text-sm bg-white/5 p-3 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-bold text-white">{payment.users?.name || 'Utente'}</span>
+                                                                    <span className="text-[10px] text-[#B3B3B3]">
+                                                                        Data: {new Date(payment.payment_date).toLocaleDateString('it-IT')}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="text-[10px] font-bold text-[#1DB954] bg-[#1DB954]/10 px-2 py-1 rounded-md border border-[#1DB954]/20">
+                                                                        Per: {payment.target_month !== null && payment.target_month !== undefined ? mesiCorti[payment.target_month] : 'N/D'} {payment.target_year || ''}
+                                                                    </span>
+                                                                    <span className="text-[#1DB954] font-bold">€{payment.amount.toFixed(2)}</span>
+                                                                    <button
+                                                                        onClick={() => requestDeletePayment(payment.id)}
+                                                                        className="text-red-500 bg-red-500/10 p-2 rounded-full hover:bg-red-500 hover:text-white transition-all"
+                                                                        title="Annulla incasso"
+                                                                    >
+                                                                        🗑️
+                                                                    </button>
+                                                                </div>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="text-sm text-[#B3B3B3]">Nessun incasso registrato.</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <p className="text-center mt-10 text-[#B3B3B3]">
+                            {loadingPlans ? 'Caricamento dashboard in corso...' : 'Nessun piano associato trovato.'}
+                        </p>
+                    )}
+                </main>
+            </div>
+        </div>
+    )0%] h-[50%] bg-red-500/5 rounded-full blur-[120px] pointer-events-none"></div>
+
+            <div className="max-w-5xl mx-auto relative z-10">
+
+                {/* --- BANNER PROMEMORIA --- */}
+                {deadline.isReminderActive && (
+                    <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-2xl flex items-center gap-4 animate-pulse backdrop-blur-md">
+                        <span className="text-2xl">🔔</span>
+                        <div>
+                            <p className="font-bold text-yellow-500">Scadenza Imminente</p>
+                            <p className="text-sm text-yellow-200/80">Il rinnovo Spotify è tra {deadline.daysLeft} {deadline.daysLeft === 1 ? 'giorno' : 'giorni'}. Assicurati di avere fondi sulla carta!</p>
+                        </div>
+                    </div>
+                )}
+
+                <header className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
+                    <h1 className="text-3xl font-black text-white tracking-tight">
+                        Spoti<span className="text-[#1DB954]">Share</span>
+                    </h1>
+                    {user && (
+                        <div className="text-right">
+                            <p className="font-bold flex items-center justify-end gap-2">
+                                <a href="/profile" className="hover:text-[#1DB954] transition-colors text-white/90">
+                                    {user.user_metadata?.full_name || 'Utente'}
+                                </a>
+                                {userRole === 'admin' && (
+                                    <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Admin</span>
+                                )}
+                            </p>
+                            <p className="text-xs text-[#B3B3B3] flex items-center justify-end gap-1">
+                                <span className="w-2 h-2 rounded-full bg-[#1DB954] animate-pulse"></span> {dbStatus}
+                            </p>
+                        </div>
+                    )}
+                </header>
+
+                <main>
+                    {userPlanId && myPlan ? (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+
+                                {/* --- LA TUA CASSA --- */}
+                                <div className="bg-[#181818]/60 backdrop-blur-xl p-6 rounded-3xl border border-white/5 relative overflow-hidden shadow-2xl flex flex-col justify-between transition-all hover:border-white/10">
+                                    {/* EFFETTO SFONDO COUNTER */}
+                                    <div className={`absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-20 ${deadline.daysLeft <= 3 ? 'bg-red-500' : 'bg-[#1DB954]'}`}></div>
+
+                                    <div className="relative z-10">
+                                        <h2 className="text-xl font-bold text-white/70 mb-6 flex justify-between items-center">
+                                            La tua Cassa
+                                            <span className="text-xs bg-white/10 px-3 py-1 rounded-full text-white border border-white/10">Tot: €{totalUserPaid.toFixed(2)}</span>
+                                        </h2>
+
+                                        {/* COUNTER VISIVO */}
+                                        <div className="flex items-center gap-6 mb-8">
+                                            <div className={`w-24 h-24 rounded-3xl flex flex-col items-center justify-center border-2 shadow-lg transition-all
+                                                ${deadline.daysLeft <= 3 ? 'border-red-500 bg-red-500/10' : 'border-[#1DB954] bg-[#1DB954]/10'}`}>
+                                                <span className={`text-4xl font-black ${deadline.daysLeft <= 3 ? 'text-red-500' : 'text-[#1DB954]'}`}>
+                                                    {deadline.daysLeft}
+                                                </span>
+                                                <span className="text-[10px] uppercase font-bold text-[#B3B3B3]">Giorni</span>
+                                            </div>
+
+                                            <div className="flex-grow">
+                                                <p className="text-[#B3B3B3] text-xs uppercase tracking-widest font-bold">Prossima Scadenza</p>
+                                                <p className="text-2xl font-black text-white">{deadline.dateString}</p>
+                                                <p className="text-xs text-[#B3B3B3] mt-1 italic">Quota: €{(myPlan.monthly_cost / myPlan.max_members).toFixed(2)}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* SEZIONE DEBITO */}
+                                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl backdrop-blur-sm">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs font-bold text-red-400 uppercase">Situazione Debiti</span>
+                                                <span className={`text-sm font-bold ${calculateUserDebt(user?.id, payments) > 0 ? 'text-red-500' : 'text-[#1DB954]'}`}>
+                                                    {calculateUserDebt(user?.id, payments) > 0
+                                                        ? `Mancano ${calculateUserDebt(user?.id, payments)} mese${calculateUserDebt(user?.id, payments) > 1 ? 's' : ''}`
+                                                        : 'Tutto in regola ✅'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* SELETTORE MESE E PAGAMENTO */}
+                                        <div className="space-y-4 pt-6 border-t border-white/10">
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-xs font-bold text-[#B3B3B3] uppercase ml-1">Mese da saldare:</label>
+                                                <div className="flex gap-2">
+                                                    <select
+                                                        value={selectedTargetMonth}
+                                                        onChange={(e) => setSelectedTargetMonth(Number(e.target.value))}
+                                                        className="flex-grow bg-black/40 border border-white/10 text-white rounded-2xl p-3 outline-none focus:border-[#1DB954] transition-colors"
+                                                    >
+                                                        {mesi.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                                                    </select>
+                                                    <select
+                                                        value={selectedTargetYear}
+                                                        onChange={(e) => setSelectedTargetYear(Number(e.target.value))}
+                                                        className="w-24 bg-black/40 border border-white/10 text-white rounded-2xl p-3 outline-none focus:border-[#1DB954] transition-colors"
+                                                    >
+                                                        {availableYears.map(year => (
+                                                            <option key={year} value={year}>{year}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onClick={requestPayment}
+                                                disabled={isPaying}
+                                                className="w-full bg-[#1DB954] text-black font-black py-4 rounded-2xl hover:scale-[1.02] transition-all shadow-lg shadow-[#1DB954]/20 disabled:opacity-50 disabled:hover:scale-100"
+                                            >
+                                                {isPaying ? 'ELABORAZIONE...' : `REGISTRA PAGAMENTO ${mesiCorti[selectedTargetMonth].toUpperCase()}`}
+                                            </button>
+                                        </div>
+
+                                        {/* GRAFICA 12 MESI */}
+                                        <h3 className="font-bold text-xs text-white/50 uppercase tracking-wider mt-8 mb-4 border-b border-white/10 pb-2">Status Pagamenti {selectedTargetYear}</h3>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {mesiCorti.map((mese, index) => {
+                                                const isPaid = checkMonthPaid(index, selectedTargetYear, payments);
+                                                const isCurrentMonth = new Date().getMonth() === index && currentYear === selectedTargetYear;
+
+                                                return (
+                                                    <div
+                                                        key={mese}
+                                                        className={`p-2 rounded-xl border text-center flex flex-col items-center justify-center transition-all ${isPaid
+                                                            ? 'bg-[#1DB954]/20 border-[#1DB954] text-[#1DB954]'
+                                                            : isCurrentMonth
+                                                                ? 'bg-white/5 border-yellow-500 text-yellow-500'
+                                                                : 'bg-black/20 border-white/10 text-[#555555]'
+                                                            }`}
+                                                    >
+                                                        <span className="text-[10px] uppercase font-bold mb-1">{mese}</span>
+                                                        <span className="text-lg">{isPaid ? '✅' : isCurrentMonth ? '🔔' : '⏳'}</span>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* --- IL GRUPPO --- */}
+                                <div>
+                                    <h2 className="text-2xl font-black mb-6 text-white/90">Membri del Gruppo</h2>
+                                    <div className="bg-[#181818]/60 backdrop-blur-xl p-3 rounded-3xl border border-white/5 shadow-2xl">
+                                        <ul className="divide-y divide-white/5">
+                                            {members.map((member) => (
+                                                <li key={member.id} className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors rounded-2xl group">
+                                                    <div className="w-12 h-12 rounded-full bg-white/10 border border-white/10 text-[#1DB954] flex items-center justify-center font-bold text-xl shadow-inner group-hover:scale-110 transition-transform">
+                                                        {member.name ? member.name.charAt(0).toUpperCase() : '?'}
+                                                    </div>
+                                                    <div className="flex-grow">
+                                                        <p className="font-bold text-lg flex items-center gap-2">
+                                                            {member.name} {member.id === user?.id && <span className="text-[#1DB954] text-[10px] border border-[#1DB954] px-2 py-0.5 rounded-full font-bold uppercase">Tu</span>}
+                                                        </p>
+                                                        <p className="text-[#B3B3B3] text-sm">{member.email}</p>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* --- SEZIONE ADMIN --- */}
+                            {userRole === 'admin' && (
+                                <div className="mt-12 pt-12 border-t border-white/10 relative">
+                                    <div className="absolute -top-px left-0 w-full h-px bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
+                                    <div className="flex justify-between items-center mb-8">
+                                        <h2 className="text-2xl font-black text-red-500 flex items-center gap-2">
+                                            🛡️ Pannello Amministratore
+                                        </h2>
+                                        <div className="bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-2xl backdrop-blur-md">
+                                            <span className="text-sm text-[#B3B3B3] mr-2">Cassa Totale:</span>
+                                            <span className="text-xl font-bold text-white">€{totalGroupPaid.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="bg-[#181818]/60 backdrop-blur-xl p-6 rounded-3xl border border-red-500/20 shadow-xl">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h3 className="font-bold text-lg text-white">Gestione Piano</h3>
+                                                <button
+                                                    onClick={() => {
+                                                        setIsManagingPlan(!isManagingPlan);
+                                                        if(!isManagingPlan) {
+                                                            setPlanCost(myPlan?.monthly_cost.toString() || '');
+                                                            setPlanMaxMembers(myPlan?.max_members.toString() || '');
+                                                        }
+                                                    }}
+                                                    className="text-xs text-[#1DB954] font-bold hover:underline"
+                                                >
+                                                    {isManagingPlan ? 'Annulla' : 'Modifica'}
+                                                </button>
+                                            </div>
+
+                                            {isManagingPlan ? (
+                                                <div className="space-y-4">
+                                                    <div className="flex flex-col gap-2">
+                                                        <label className="text-xs font-bold text-[#B3B3B3] uppercase">Costo Mensile (€)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={planCost}
+                                                            onChange={(e) => setPlanCost(e.target.value)}
+                                                            className="bg-black/40 border border-white/10 text-white rounded-xl p-3 outline-none focus:border-[#1DB954] transition-colors"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col gap-2">
+                                                        <label className="text-xs font-bold text-[#B3B3B3] uppercase">Membri Max</label>
+                                                        <input
+                                                            type="number"
+                                                            value={planMaxMembers}
+                                                            onChange={(e) => setPlanMaxMembers(e.target.value)}
+                                                            className="bg-black/40 border border-white/10 text-white rounded-xl p-3 outline-none focus:border-[#1DB954] transition-colors"
+                                                        />
+                                                    </div>
+                                                    <button
+                                                        onClick={updatePlanDetails}
+                                                        className="w-full bg-[#1DB954] text-black font-bold py-3 rounded-xl hover:bg-[#1ed760] transition-colors"
+                                                    >
+                                                        Salva Modifiche
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-[#B3B3B3]">Costo Mensile:</span>
+                                                        <span className="font-bold text-white">€{myPlan?.monthly_cost.toFixed(2)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-[#B3B3B3]">Membri Max:</span>
+                                                        <span className="font-bold text-white">{myPlan?.max_members}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="mt-8 pt-6 border-t border-white/10">
+                                                <h3 className="font-bold text-lg mb-2 text-white">Registra Incasso Manuale</h3>
+                                                <p className="text-sm text-[#B3B3B3] mb-4">Segna i pagamenti contanti per {mesi[selectedTargetMonth]} {selectedTargetYear}.</p>
+                                                <ul className="space-y-3">
+                                                    {members.map(member => (
+                                                        <li key={member.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5 hover:border-white/10 transition-colors">
+                                                            <span className="font-medium text-white/90">{member.name}</span>
+                                                            <button
+                                                                onClick={() => requestAdminAddPayment(member.id, member.name)}
+                                                                className="text-xs bg-transparent border border-[#1DB954] text-[#1DB954] font-bold px-3 py-1.5 rounded-full hover:bg-[#1DB954] hover:text-black transition-colors"
+                                                            >
+                                                                + Segna Pagato
+                                                            </button>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-[#181818]/60 backdrop-blur-xl p-6 rounded-3xl border border-red-500/20 shadow-xl flex flex-col justify-between">
+                                            <div className="relative z-10">
+                                                <h3 className="font-bold text-lg mb-4 text-white">Invita nuovi Membri</h3>
+                                                <p className="text-sm text-[#B3B3B3] mb-4">Condividi questo link per permettere ad altri di unirsi al tuo gruppo.</p>
+                                                <div className="flex items-center gap-2 bg-black/40 p-3 rounded-2xl border border-white/10">
+                                                    <code className="flex-grow text-[#1DB954] font-mono text-sm truncate">
+                                                        {`${window.location.origin}/join/${myPlan?.invite_code || 'generazione...'}`}
+                                                    </code>
+                                                    <button
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(`${window.location.origin}/join/${myPlan?.invite_code}`);
+                                                            showToast("Link copiato negli appunti!", "success");
+                                                        }}
+                                                        className="bg-[#1DB954] text-black text-xs font-bold px-3 py-2 rounded-xl hover:bg-[#1ed760] transition-colors"
+                                                    >
+                                                        Copia
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="mt-8">
+                                                <h3 className="font-bold text-lg mb-4 text-white">Storico Generale</h3>
+                                                {allGroupPayments.length > 0 ? (
+                                                    <ul className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                                        {allGroupPayments.map(payment => (
+                                                            <li key={payment.id} className="flex justify-between items-center text-sm bg-white/5 p-3 rounded-xl border border-white/5 group hover:border-white/10 transition-colors">
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-bold text-white">{payment.users?.name || 'Utente'}</span>
+                                                                    <span className="text-[10px] text-[#B3B3B3]">
+                                                                        Data: {new Date(payment.payment_date).toLocaleDateString('it-IT')}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="text-[10px] font-bold text-[#1DB954] bg-[#1DB954]/10 px-2 py-1 rounded-md border border-[#1DB954]/20">
+                                                                        Per: {payment.target_month !== null && payment.target_month !== undefined ? mesiCorti[payment.target_month] : 'N/D'} {payment.target_year || ''}
+                                                                    </span>
+                                                                    <span className="text-[#1DB954] font-bold">€{payment.amount.toFixed(2)}</span>
+                                                                    <button
+                                                                        onClick={() => requestDeletePayment(payment.id)}
+                                                                        className="text-red-500 bg-red-500/10 p-2 rounded-full hover:bg-red-500 hover:text-white transition-all"
+                                                                        title="Annulla incasso"
+                                                                    >
+                                                                        🗑️
+                                                                    </button>
+                                                                </div>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="text-sm text-[#B3B3B3]">Nessun incasso registrato.</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <p className="text-center mt-10 text-[#B3B3B3]">
+                            {loadingPlans ? 'Caricamento dashboard in corso...' : 'Nessun piano associato trovato.'}
+                        </p>
+                    )}
+                </main>
+            </div>
+        </div>
+    )
                                                 </div>
                                             </div>
 

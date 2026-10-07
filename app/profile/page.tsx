@@ -67,53 +67,60 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#121212] text-white flex items-center justify-center">
-        <p className="animate-pulse text-[#1DB954]">Caricamento profilo...</p>
+      <div className="min-h-screen bg-[#121212] text-white flex items-center justify-center relative overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#1DB954]/10 rounded-full blur-[120px] pointer-events-none"></div>
+        <p className="animate-pulse text-[#1DB954] font-bold text-xl z-10">Caricamento profilo...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#121212] text-white p-8 font-sans">
-      <div className="max-w-2xl mx-auto">
-        <header className="flex justify-between items-center mb-10 border-b border-[#282828] pb-6">
-          <h1 className="text-3xl font-bold text-[#1DB954]">Il Mio Profilo</h1>
+    <div className="min-h-screen bg-[#121212] text-white p-8 font-sans relative overflow-hidden">
+      {/* Ambient Background Glows */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#1DB954]/5 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#1DB954]/5 rounded-full blur-[120px] pointer-events-none"></div>
+
+      <div className="max-w-2xl mx-auto relative z-10">
+        <header className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
+          <h1 className="text-3xl font-black text-white tracking-tight">
+            Il Mio <span className="text-[#1DB954]">Profilo</span>
+          </h1>
           <button
             onClick={() => router.push('/dashboard')}
-            className="text-sm text-[#B3B3B3] hover:text-white transition-colors"
+            className="text-sm text-[#B3B3B3] hover:text-white transition-colors font-medium"
           >
             Torna alla Dashboard
           </button>
         </header>
 
-        <main className="bg-[#181818] p-8 rounded-2xl border border-[#282828] shadow-2xl">
+        <main className="bg-[#181818]/60 backdrop-blur-xl p-8 rounded-3xl border border-white/5 shadow-2xl transition-all hover:border-white/10">
           <form onSubmit={handleUpdateProfile} className="space-y-6">
-            <div>
-              <label className="block text-xs font-bold text-[#B3B3B3] uppercase mb-2">Nome Visualizzato</label>
+            <div className="group">
+              <label className="block text-xs font-bold text-[#B3B3B3] uppercase mb-2 ml-1 group-focus-within:text-[#1DB954] transition-colors">Nome Visualizzato</label>
               <input
                 type="text"
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
-                className="w-full bg-[#121212] border border-[#3E3E3E] text-white rounded-xl p-4 outline-none focus:border-[#1DB954] transition-colors"
+                className="w-full bg-black/40 border border-white/10 text-white rounded-2xl p-4 outline-none focus:border-[#1DB954] transition-all placeholder:text-[#555555]"
                 placeholder="Inserisci il tuo nome..."
                 required
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-[#B3B3B3] uppercase mb-2">Email (Non modificabile)</label>
+            <div className="group">
+              <label className="block text-xs font-bold text-[#B3B3B3] uppercase mb-2 ml-1">Email (Non modificabile)</label>
               <input
                 type="email"
                 value={userEmail}
                 disabled
-                className="w-full bg-[#282828] border border-[#3E3E3E] text-[#B3B3B3] rounded-xl p-4 outline-none cursor-not-allowed"
+                className="w-full bg-white/5 border border-white/5 text-[#B3B3B3] rounded-2xl p-4 outline-none cursor-not-allowed opacity-60"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#1DB954] text-black font-black py-4 rounded-xl hover:scale-[1.02] transition-transform shadow-lg shadow-[#1DB954]/20 disabled:opacity-50"
+              className="w-full bg-[#1DB954] text-black font-black py-4 rounded-2xl hover:scale-[1.02] transition-all shadow-lg shadow-[#1DB954]/20 disabled:opacity-50 disabled:hover:scale-100"
             >
               {loading ? 'Aggiornamento...' : 'Salva Modifiche'}
             </button>
