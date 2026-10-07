@@ -719,10 +719,10 @@ export default function Dashboard() {
                         <p className="text-zinc-400 font-medium">Nessun piano associato trovato.</p>
                     </>
                 )}
-                            {userRole === 'admin' && !userPlanId && (
-                                <div className="mt-6 p-6 bg-white/5 border border-white/10 rounded-3L-3xl backdrop-blur-md max-w-md">
-                                    <h3 className="text-xl font-bold text-zinc-100 mb-2">Crea il tuo Gruppo</h3>
-                                    <p className="text-sm text-zinc-400 mb-6">Sei l'amministratore ma non hai ancora un gruppo. Creane uno ora per iniziare a invitare i membri.</p>
+                            {(!userPlanId) && (
+                                <div className="mt-6 p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md max-w-md">
+                                    <h3 className="text-xl font-bold text-zinc-100 mb-2">Inizia con SpotiShare</h3>
+                                    <p className="text-sm text-zinc-400 mb-6">Non sei ancora associato a nessun gruppo. Puoi crearne uno nuovo come amministratore oppure unirtene a uno esistente.</p>
                                     <div className="flex flex-col gap-4">
                                         <div className="flex gap-3">
                                             <div className="flex-grow text-left">
@@ -758,6 +758,16 @@ export default function Dashboard() {
                                         >
                                             Crea Gruppo Ora
                                         </button>
+                                        <div className="relative py-2">
+                                            <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-white/10"></span></div>
+                                            <div className="relative flex justify-center text-xs uppercase"><span className="bg-[#0B0B0F] px-2 text-zinc-500">Oppure</span></div>
+                                        </div>
+                                        <a
+                                            href="/join"
+                                            className="text-center bg-white/5 border border-white/10 text-zinc-300 font-bold py-3 rounded-xl hover:bg-white/10 transition-all active:scale-95"
+                                        >
+                                            Ho un codice invito
+                                        </a>
                                     </div>
                                 </div>
                             )}
