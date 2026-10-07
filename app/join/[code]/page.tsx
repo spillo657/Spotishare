@@ -14,7 +14,7 @@ export default function JoinPlanPage() {
 
   useEffect(() => {
     async function handleJoin() {
-      const code = params.code as string;
+      const code = (params.code as string)?.toUpperCase();
       if (!code) {
         setStatus('invalid');
         setLoading(false);
