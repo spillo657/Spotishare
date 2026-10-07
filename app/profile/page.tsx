@@ -67,60 +67,57 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#121212] text-white flex items-center justify-center relative overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#1DB954]/10 rounded-full blur-[120px] pointer-events-none"></div>
-        <p className="animate-pulse text-[#1DB954] font-bold text-xl z-10">Caricamento profilo...</p>
+      <div className="min-h-screen bg-[#0B0B0F] text-zinc-100 flex items-center justify-center">
+        <p className="animate-pulse text-[#1DB954] font-medium">Caricamento profilo...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#121212] text-white p-8 font-sans relative overflow-hidden">
-      {/* Ambient Background Glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#1DB954]/5 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#1DB954]/5 rounded-full blur-[120px] pointer-events-none"></div>
-
-      <div className="max-w-2xl mx-auto relative z-10">
+    <div className="min-h-screen bg-[#0B0B0F] text-zinc-100 p-8 font-sans selection:bg-[#1DB954]/30">
+      <div className="max-w-2xl mx-auto">
         <header className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
-          <h1 className="text-3xl font-black text-white tracking-tight">
-            Il Mio <span className="text-[#1DB954]">Profilo</span>
-          </h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-zinc-100">Il Mio Profilo</h1>
           <button
             onClick={() => router.push('/dashboard')}
-            className="text-sm text-[#B3B3B3] hover:text-white transition-colors font-medium"
+            className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
           >
             Torna alla Dashboard
           </button>
         </header>
 
-        <main className="bg-[#181818]/60 backdrop-blur-xl p-8 rounded-3xl border border-white/5 shadow-2xl transition-all hover:border-white/10">
+        <main className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl ring-1 ring-white/5 p-8">
           <form onSubmit={handleUpdateProfile} className="space-y-6">
             <div className="group">
-              <label className="block text-xs font-bold text-[#B3B3B3] uppercase mb-2 ml-1 group-focus-within:text-[#1DB954] transition-colors">Nome Visualizzato</label>
+              <label className="block text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2 group-focus-within:text-[#1DB954] transition-colors">
+                Nome Visualizzato
+              </label>
               <input
                 type="text"
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 text-white rounded-2xl p-4 outline-none focus:border-[#1DB954] transition-all placeholder:text-[#555555]"
+                className="w-full bg-black/20 border border-white/10 text-zinc-100 rounded-xl p-4 outline-none focus:ring-2 focus:ring-[#1DB954]/50 transition-all shadow-inner placeholder:text-zinc-600"
                 placeholder="Inserisci il tuo nome..."
                 required
               />
             </div>
 
             <div className="group">
-              <label className="block text-xs font-bold text-[#B3B3B3] uppercase mb-2 ml-1">Email (Non modificabile)</label>
+              <label className="block text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">
+                Email (Non modificabile)
+              </label>
               <input
                 type="email"
                 value={userEmail}
                 disabled
-                className="w-full bg-white/5 border border-white/5 text-[#B3B3B3] rounded-2xl p-4 outline-none cursor-not-allowed opacity-60"
+                className="w-full bg-white/5 border border-white/5 text-zinc-500 rounded-xl p-4 outline-none cursor-not-allowed shadow-inner"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#1DB954] text-black font-black py-4 rounded-2xl hover:scale-[1.02] transition-all shadow-lg shadow-[#1DB954]/20 disabled:opacity-50 disabled:hover:scale-100"
+              className="w-full bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black font-bold py-4 rounded-full shadow-[0_0_20px_rgba(29,185,84,0.4)] hover:shadow-[0_0_30px_rgba(29,185,84,0.6)] transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
             >
               {loading ? 'Aggiornamento...' : 'Salva Modifiche'}
             </button>
