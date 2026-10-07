@@ -102,10 +102,7 @@ export default function Dashboard() {
 
     useEffect(() => {
         const fetchUserDataAndPlans = async (authUser: any) => {
-            console.log("--- DASHBOARD DEBUG START ---");
-            console.log("Auth User:", authUser);
             try {
-                console.log("Fetching user record...");
                 const { data: userData, error: userError } = await supabase
                     .from('users')
                     .select('plan_id, role')
@@ -113,13 +110,12 @@ export default function Dashboard() {
                     .single();
 
                 if (userError && userError.code !== 'PGRST116') {
-                    console.error("Supabase User Fetch Error:", userError);
+                    console.error("Error fetching user:", userError);
                 }
 
                 let currentUserData = userData;
 
                 if (!userData) {
-                    console.log("User not found, attempting to create...");
                     const { data: newUser, error: insertError } = await supabase
                         .from('users')
                         .insert({
@@ -132,50 +128,38 @@ export default function Dashboard() {
                         .single();
 
                     if (insertError) {
-                        console.error("Supabase User Insert Error:", insertError);
+                        console.error("Error creating user record:", insertError);
                     } else {
-                        console.log("User created successfully:", newUser);
                         currentUserData = newUser;
                     }
-                } else {
-                    console.log("User found in DB:", userData);
                 }
 
                 if (currentUserData) {
-                    console.log("Updating local state with user data:", currentUserData);
                     setDbStatus("✅ Online")
                     setUserPlanId(currentUserData.plan_id)
                     setUserRole(currentUserData.role || 'user')
 
                     if (currentUserData.plan_id) {
-                        console.log("Plan ID found, fetching members and payments...");
                         fetchGroupMembers(currentUserData.plan_id)
                         if (currentUserData.role === 'admin') fetchAllGroupPayments(currentUserData.plan_id)
-                    } else {
-                        console.log("No Plan ID associated with this user.");
                     }
                 }
                 fetchPayments(authUser.id)
-                const { data: plansData, error: plansError } = await supabase.from('plans').select('*')
-                if (plansError) console.error("Error fetching all plans:", plansError);
+                const { data: plansData } = await supabase.from('plans').select('*')
                 if (plansData) setPlans(plansData)
-
             } catch (error: any) {
-                console.error("Unexpected critical error in fetchUserDataAndPlans:", error);
+                console.error("Unexpected error in fetchUserDataAndPlans:", error);
                 showToast("Errore imprevisto nel caricamento dati", "error");
             } finally {
-                console.log("Loading state set to false");
                 setLoadingPlans(false)
             }
         }
 
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) {
-                console.log("Session found, initializing dashboard...");
                 setUser(session.user)
                 fetchUserDataAndPlans(session.user)
             } else {
-                console.log("No session found, stopping loading.");
                 setLoadingPlans(false)
             }
         })
@@ -345,6 +329,30 @@ export default function Dashboard() {
         }
     };
 
+    const removeMember = async (memberId: string, memberName: string) => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Rimuovi Membro",
+            message: \`Sei sicuro di voler rimuovere \${memberName} dal gruppo? L'utente non avrà più accesso alla dashboard del gruppo.\`,
+            action: async () => {
+                setIsPaying(true)
+                const { error } = await supabase
+                    .from('users')
+                    .update({ plan_id: null })
+                    .eq('id', memberId)
+
+                if (!error) {
+                    showToast(\`\${memberName} rimosso dal gruppo\`, 'success')
+                    fetchGroupMembers(userPlanId!)
+                } else {
+                    showToast("Errore durante la rimozione: " + error.message, 'error')
+                }
+                setIsPaying(false)
+                setConfirmModal(null)
+            }
+        })
+    }
+
     const myPlan = plans.find(p => p.id === userPlanId)
     const ringRadius = 36;
     const circumference = 2 * Math.PI * ringRadius;
@@ -491,6 +499,15 @@ export default function Dashboard() {
                                                         </p>
                                                         <p className="text-zinc-400 text-xs">\${member.email}</p>
                                                     </div>
+                                                    {userRole === 'admin' && member.id !== user?.id && (
+                                                        <button
+                                                            onClick={() => removeMember(member.id, member.name)}
+                                                            className="p-2 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                                            title="Rimuovi dal gruppo"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    )}
                                                 </li>
                                             ))}
                                         </ul>
