@@ -90,6 +90,28 @@ export default function Dashboard() {
         if (data) setAllGroupPayments(data)
     }
 
+    const ensureInviteCode = async (plan: any) => {
+        if (plan?.invite_code) return plan.invite_code;
+
+        try {
+            const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const { data, error } = await supabase
+                .from('plans')
+                .update({ invite_code: newCode })
+                .eq('id', plan.id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            // Update local state to avoid re-fetching
+            setPlans(prev => prev.map(p => p.id === plan.id ? { ...p, invite_code: newCode } : p));
+            return newCode;
+        } catch (error: any) {
+            console.error("Error generating invite code:", error);
+            return null;
+        }
+    }
+
     useEffect(() => {
         const fetchUserDataAndPlans = async (authUser: any) => {
             const { data: userData } = await supabase
@@ -619,9 +641,20 @@ export default function Dashboard() {
                                                             {`${window.location.origin}/join/${myPlan?.invite_code || 'generazione...'}`}
                                                         </code>
                                                         <button
-                                                            onClick={() => {
-                                                                navigator.clipboard.writeText(`${window.location.origin}/join/${myPlan?.invite_code}`);
+                                                            onClick={async () => {
+                                                                let code = myPlan?.invite_code;
+                                                                if (!code) {
+                                                                    showToast("Generazione codice in corso...", "info");
+                                                                    code = await ensureInviteCode(myPlan);
+                                                                }
+                                                                if (!code) {
+                                                                    showToast("Errore nella generazione del codice", "error");
+                                                                    return;
+                                                                }
+                                                                navigator.clipboard.writeText(`${window.location.origin}/join/${code}`);
                                                                 showToast("Link copiato negli appunti!", "success");
+                                                                // Refresh state to show the new code
+                                                                setPlans(prev => prev.map(p => p.id === myPlan?.id ? { ...p, invite_code: code } : p));
                                                             }}
                                                             className="bg-green-500 text-black text-[10px] font-bold px-4 py-2 rounded-xl hover:bg-green-400 transition-all active:scale-95"
                                                         >
