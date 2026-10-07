@@ -674,7 +674,7 @@ export default function Dashboard() {
                                 {loadingPlans ? 'Sincronizzazione dashboard...' : 'Nessun piano associato trovato.'}
                             </p>
                             {userRole === 'admin' && !userPlanId && (
-                                <div className="mt-6 p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md max-w-md">
+                                <div className="mt-6 p-6 bg-white/5 border border-white/10 rounded-3L-3xl backdrop-blur-md max-w-md">
                                     <h3 className="text-xl font-bold text-zinc-100 mb-2">Crea il tuo Gruppo</h3>
                                     <p className="text-sm text-zinc-400 mb-6">Sei l'amministratore ma non hai ancora un gruppo. Creane uno ora per iniziare a invitare i membri.</p>
                                     <div className="flex flex-col gap-4">
@@ -720,5 +720,6 @@ export default function Dashboard() {
                 }
             </main>
         </div>
+    </div>
     )
 }
