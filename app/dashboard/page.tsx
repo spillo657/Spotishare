@@ -142,8 +142,10 @@ export default function Dashboard() {
             fetchPayments(authUser.id)
             const { data: plansData } = await supabase.from('plans').select('*')
             if (plansData) setPlans(plansData)
+        } finally {
             setLoadingPlans(false)
         }
+    }
 
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) {
@@ -706,10 +708,17 @@ export default function Dashboard() {
                         </>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-20 text-center">
-                            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4 animate-bounce">⏳</div>
-                            <p className="text-zinc-400 font-medium">
-                                {loadingPlans ? 'Sincronizzazione dashboard...' : 'Nessun piano associato trovato.'}
-                            </p>
+                {loadingPlans ? (
+                    <>
+                        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4 animate-bounce">⏳</div>
+                        <p className="text-zinc-400 font-medium">Sincronizzazione dashboard...</p>
+                    </>
+                ) : (
+                    <>
+                        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4">❌</div>
+                        <p className="text-zinc-400 font-medium">Nessun piano associato trovato.</p>
+                    </>
+                )}
                             {userRole === 'admin' && !userPlanId && (
                                 <div className="mt-6 p-6 bg-white/5 border border-white/10 rounded-3L-3xl backdrop-blur-md max-w-md">
                                     <h3 className="text-xl font-bold text-zinc-100 mb-2">Crea il tuo Gruppo</h3>
