@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../../utils/supabase'
-import OneSignal from 'react-onesignal' // IMPORT ONESIGNAL AGGIUNTO
+import { useToast } from '@/components/ToastContext'
+// OneSignal rimosso da qui perché ora è gestito globalmente in layout.tsx
 
 export default function Dashboard() {
     // --- STATI PRINCIPALI ---
@@ -18,7 +19,9 @@ export default function Dashboard() {
     const [allGroupPayments, setAllGroupPayments] = useState<any[]>([])
     const [isPaying, setIsPaying] = useState(false)
 
-    // --- STATI PER LA SCELTA DEL MESE/ANNO DA PAGARE ---
+    const { showToast } = useToast()
+
+    // --- STATI PER la SCELTA DEL MESE/ANNO DA PAGARE ---
     const currentYear = new Date().getFullYear()
     const currentMonth = new Date().getMonth()
     const [selectedTargetMonth, setSelectedTargetMonth] = useState<number>(currentMonth)
@@ -29,17 +32,13 @@ export default function Dashboard() {
     const availableYears = Array.from({ length: (currentYear + 1) - startYear + 1 }, (_, i) => startYear + i);
 
     // --- STATI PER LA UI CUSTOM ---
-    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, action: () => void } | null>(null)
+    const [isManagingPlan, setIsManagingPlan] = useState(false)
+    const [planCost, setPlanCost] = useState('')
+    const [planMaxMembers, setPlanMaxMembers] = useState('')
 
     const mesi = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
     const mesiCorti = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic']
-
-    // --- UTILITY NOTIFICHE ---
-    const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
-        setToast({ message, type })
-        setTimeout(() => setToast(null), 3500)
-    }
 
     // --- LOGICA DEL COUNTER (SCADENZA AL 24) ---
     const getDeadlineInfo = () => {
@@ -92,36 +91,6 @@ export default function Dashboard() {
     }
 
     useEffect(() => {
-        // --- INIZIALIZZAZIONE ONESIGNAL ---
-        const setupOneSignal = async (userId: string) => {
-            try {
-                await OneSignal.init({
-                    appId: "a392ce28-3295-4c14-b7a7-cf7833e00720", // SOSTITUISCI CON IL TUO APP ID!
-                    allowLocalhostAsSecureOrigin: true
-                });
-
-                // Chiede il permesso per le notifiche
-                await OneSignal.Slidedown.promptPush();
-
-                // Ascolta quando l'utente accetta
-                OneSignal.User.PushSubscription.addEventListener('change', async (subscription) => {
-                    if (subscription.current.optedIn) {
-                        const pushToken = subscription.current.id;
-
-                        if (pushToken) {
-                            await supabase
-                                .from('users')
-                                .update({ onesignal_id: pushToken })
-                                .eq('id', userId);
-                            console.log("Notifiche attivate! Token salvato:", pushToken);
-                        }
-                    }
-                });
-            } catch (error) {
-                console.error("Errore OneSignal:", error);
-            }
-        };
-
         const fetchUserDataAndPlans = async (authUser: any) => {
             const { data: userData } = await supabase
                 .from('users')
@@ -148,9 +117,6 @@ export default function Dashboard() {
             const { data: plansData } = await supabase.from('plans').select('*')
             if (plansData) setPlans(plansData)
             setLoadingPlans(false)
-
-            // Avvia OneSignal dopo aver caricato/creato l'utente nel database
-            setupOneSignal(authUser.id);
         }
 
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -169,11 +135,26 @@ export default function Dashboard() {
             if (p.target_month !== undefined && p.target_month !== null) {
                 return p.target_month === monthIndex && p.target_year === targetYear
             }
-            // Fallback per vecchi pagamenti senza le nuove colonne
             const pDate = new Date(p.payment_date)
             return pDate.getMonth() === monthIndex && pDate.getFullYear() === targetYear
         })
     }
+
+    const calculateUserDebt = (userId: string, allPayments: any[]) => {
+        const userPayments = allPayments.filter(p => p.user_id === userId);
+        let unpaidMonths = 0;
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth();
+
+        // Consideramos pagati i mesi da Gennaio fino al mese corrente
+        for (let i = 0; i <= currentMonth; i++) {
+            if (!checkMonthPaid(i, currentYear, userPayments)) {
+                unpaidMonths++;
+            }
+        }
+        return unpaidMonths;
+    };
 
     // --- AZIONI DATABASE CON MODAL ---
     const requestPayment = () => {
@@ -198,11 +179,11 @@ export default function Dashboard() {
                 })
 
                 if (!error) {
-                    showNotification(`💸 Pagamento per ${targetMonthName} registrato!`)
+                    showToast(`💸 Pagamento per ${targetMonthName} registrato!`, 'success')
                     fetchPayments(user.id)
                     if (userRole === 'admin') fetchAllGroupPayments(userPlanId!)
                 } else {
-                    showNotification("Errore: " + error.message, 'error')
+                    showToast("Errore: " + error.message, 'error')
                 }
                 setIsPaying(false)
                 setConfirmModal(null)
@@ -230,10 +211,10 @@ export default function Dashboard() {
                     target_year: selectedTargetYear
                 })
                 if (!error) {
-                    showNotification(`✅ Incasso di ${targetMonthName} registrato per ${memberName}`)
+                    showToast(`✅ Incasso di ${targetMonthName} registrato per ${memberName}`, 'success')
                     fetchAllGroupPayments(userPlanId!)
                 } else {
-                    showNotification("Errore di registrazione", 'error')
+                    showToast("Errore di registrazione", 'error')
                 }
                 setConfirmModal(null)
             }
@@ -248,16 +229,38 @@ export default function Dashboard() {
             action: async () => {
                 const { error } = await supabase.from('payments').delete().eq('id', paymentId)
                 if (!error) {
-                    showNotification("🗑️ Pagamento eliminato", 'success')
+                    showToast("🗑️ Pagamento eliminato", 'success')
                     fetchPayments(user.id)
                     if (userRole === 'admin') fetchAllGroupPayments(userPlanId!)
                 } else {
-                    showNotification("Errore nell'eliminazione", 'error')
+                    showToast("Errore nell'eliminazione", 'error')
                 }
                 setConfirmModal(null)
             }
         })
     }
+
+    const updatePlanDetails = async () => {
+        if (!userPlanId) return;
+        try {
+            const { error } = await supabase
+                .from('plans')
+                .update({
+                    monthly_cost: parseFloat(planCost),
+                    max_members: parseInt(planMaxMembers)
+                })
+                .eq('id', userPlanId);
+
+            if (error) throw error;
+            showToast("Piano aggiornato con successo!", "success");
+            // Refresh plans to update the UI
+            const { data: plansData } = await supabase.from('plans').select('*');
+            if (plansData) setPlans(plansData);
+            setIsManagingPlan(false);
+        } catch (error: any) {
+            showToast("Errore nell'aggiornamento: " + error.message, "error");
+        }
+    };
 
     const myPlan = plans.find(p => p.id === userPlanId)
 
@@ -281,7 +284,9 @@ export default function Dashboard() {
                     {user && (
                         <div className="text-right">
                             <p className="font-bold flex items-center justify-end gap-2">
-                                {user.user_metadata?.full_name || 'Utente'}
+                                <a href="/profile" className="hover:text-[#1DB954] transition-colors">
+                                    {user.user_metadata?.full_name || 'Utente'}
+                                </a>
                                 {userRole === 'admin' && (
                                     <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider">Admin</span>
                                 )}
@@ -323,6 +328,18 @@ export default function Dashboard() {
                                                 <p className="text-[#B3B3B3] text-sm uppercase tracking-widest font-bold">Prossima Scadenza</p>
                                                 <p className="text-2xl font-black text-white">{deadline.dateString}</p>
                                                 <p className="text-xs text-[#B3B3B3] mt-1 italic">Quota: €{(myPlan.monthly_cost / myPlan.max_members).toFixed(2)}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* SEZIONE DEBITO */}
+                                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs font-bold text-red-400 uppercase">Situazione Debiti</span>
+                                                <span className={`text-sm font-bold ${calculateUserDebt(user?.id, payments) > 0 ? 'text-red-500' : 'text-[#1DB954]'}`}>
+                                                    {calculateUserDebt(user?.id, payments) > 0
+                                                        ? `Mancano ${calculateUserDebt(user?.id, payments)} mese${calculateUserDebt(user?.id, payments) > 1 ? 's' : ''}`
+                                                        : 'Tutto in regola ✅'}
+                                                </span>
                                             </div>
                                         </div>
 
@@ -421,54 +438,132 @@ export default function Dashboard() {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <div className="bg-[#181818] p-6 rounded-xl border border-red-900/30">
-                                            <h3 className="font-bold text-lg mb-2 text-white">Registra Incasso Manuale</h3>
-                                            <p className="text-sm text-[#B3B3B3] mb-4">Segna i pagamenti contanti per il mese selezionato nella tua cassa ({mesi[selectedTargetMonth]} {selectedTargetYear}).</p>
-                                            <ul className="space-y-3">
-                                                {members.map(member => (
-                                                    <li key={member.id} className="flex justify-between items-center bg-[#282828] p-3 rounded-lg border border-[#3E3E3E]">
-                                                        <span className="font-medium">{member.name}</span>
-                                                        <button
-                                                            onClick={() => requestAdminAddPayment(member.id, member.name)}
-                                                            className="text-xs bg-transparent border border-[#1DB954] text-[#1DB954] font-bold px-3 py-1.5 rounded-full hover:bg-[#1DB954] hover:text-black transition-colors"
-                                                        >
-                                                            + Segna Pagato
-                                                        </button>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h3 className="font-bold text-lg text-white">Gestione Piano</h3>
+                                                <button
+                                                    onClick={() => {
+                                                        setIsManagingPlan(!isManagingPlan);
+                                                        if(!isManagingPlan) {
+                                                            setPlanCost(myPlan?.monthly_cost.toString() || '');
+                                                            setPlanMaxMembers(myPlan?.max_members.toString() || '');
+                                                        }
+                                                    }}
+                                                    className="text-xs text-[#1DB954] hover:underline"
+                                                >
+                                                    {isManagingPlan ? 'Annulla' : 'Modifica'}
+                                                </button>
+                                            </div>
 
-                                        <div className="bg-[#181818] p-6 rounded-xl border border-red-900/30">
-                                            <h3 className="font-bold text-lg mb-4 text-white">Storico Generale</h3>
-                                            {allGroupPayments.length > 0 ? (
-                                                <ul className="space-y-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                                                    {allGroupPayments.map(payment => (
-                                                        <li key={payment.id} className="flex justify-between items-center text-sm bg-[#282828] p-3 rounded-lg border border-[#3E3E3E] group">
-                                                            <div className="flex flex-col">
-                                                                <span className="font-bold text-white">{payment.users?.name || 'Utente'}</span>
-                                                                <span className="text-[10px] text-[#B3B3B3]">
-                                                                    Data: {new Date(payment.payment_date).toLocaleDateString('it-IT')}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-[10px] font-bold text-[#1DB954] bg-[#1DB954]/10 px-2 py-1 rounded-md border border-[#1DB954]/20">
-                                                                    Per: {payment.target_month !== null && payment.target_month !== undefined ? mesiCorti[payment.target_month] : 'N/D'} {payment.target_year || ''}
-                                                                </span>
-                                                                <span className="text-[#1DB954] font-bold">€{payment.amount.toFixed(2)}</span>
-                                                                <button
-                                                                    onClick={() => requestDeletePayment(payment.id)}
-                                                                    className="text-red-500 bg-red-500/10 p-2 rounded-full hover:bg-red-500 hover:text-white transition-all"
-                                                                    title="Annulla incasso"
-                                                                >
-                                                                    🗑️
-                                                                </button>
-                                                            </div>
+                                            {isManagingPlan ? (
+                                                <div className="space-y-4">
+                                                    <div className="flex flex-col gap-2">
+                                                        <label className="text-xs font-bold text-[#B3B3B3] uppercase">Costo Mensile (€)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={planCost}
+                                                            onChange={(e) => setPlanCost(e.target.value)}
+                                                            className="bg-[#121212] border border-[#3E3E3E] text-white rounded-lg p-2 outline-none focus:border-[#1DB954]"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col gap-2">
+                                                        <label className="text-xs font-bold text-[#B3B3B3] uppercase">Membri Max</label>
+                                                        <input
+                                                            type="number"
+                                                            value={planMaxMembers}
+                                                            onChange={(e) => setPlanMaxMembers(e.target.value)}
+                                                            className="bg-[#121212] border border-[#3E3E3E] text-white rounded-lg p-2 outline-none focus:border-[#1DB954]"
+                                                        />
+                                                    </div>
+                                                    <button
+                                                        onClick={updatePlanDetails}
+                                                        className="w-full bg-[#1DB954] text-black font-bold py-2 rounded-lg hover:bg-[#1ed760] transition-colors"
+                                                    >
+                                                        Salva Modifiche
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-[#B3B3B3]">Costo Mensile:</span>
+                                                        <span className="font-bold">€{myPlan?.monthly_cost.toFixed(2)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-[#B3B3B3]">Membri Max:</span>
+                                                        <span className="font-bold">{myPlan?.max_members}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="mt-6 pt-6 border-t border-[#282828]">
+                                                <h3 className="font-bold text-lg mb-2 text-white">Registra Incasso Manuale</h3>
+                                                <p className="text-sm text-[#B3B3B3] mb-4">Segna i pagamenti contanti per il mese selezionato nella tua cassa ({mesi[selectedTargetMonth]} {selectedTargetYear}).</p>
+                                                <ul className="space-y-3">
+                                                    {members.map(member => (
+                                                        <li key={member.id} className="flex justify-between items-center bg-[#282828] p-3 rounded-lg border border-[#3E3E3E]">
+                                                            <span className="font-medium">{member.name}</span>
+                                                            <button
+                                                                onClick={() => requestAdminAddPayment(member.id, member.name)}
+                                                                className="text-xs bg-transparent border border-[#1DB954] text-[#1DB954] font-bold px-3 py-1.5 rounded-full hover:bg-[#1DB954] hover:text-black transition-colors"
+                                                            >
+                                                                + Segna Pagato
+                                                            </button>
                                                         </li>
                                                     ))}
                                                 </ul>
-                                            ) : (
-                                                <p className="text-sm text-[#B3B3B3]">Nessun incasso registrato.</p>
-                                            )}
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-[#181818] p-6 rounded-xl border border-red-900/30 flex flex-col justify-between">
+                                            <div>
+                                                <h3 className="font-bold text-lg mb-4 text-white">Invita nuovi Membri</h3>
+                                                <p className="text-sm text-[#B3B3B3] mb-4">Condividi questo link per permettere ad altri di unirsi al tuo gruppo.</p>
+                                                <div className="flex items-center gap-2 bg-[#121212] p-3 rounded-xl border border-[#3E3E3E]">
+                                                    <code className="flex-grow text-[#1DB954] font-mono text-sm truncate">
+                                                        {`${window.location.origin}/join/${myPlan?.invite_code || 'generazione...'}`}
+                                                    </code>
+                                                    <button
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(`${window.location.origin}/join/${myPlan?.invite_code}`);
+                                                            showToast("Link copiato negli appunti!", "success");
+                                                        }}
+                                                        className="bg-[#1DB954] text-black text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#1ed760] transition-colors"
+                                                    >
+                                                        Copia
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="mt-6">
+                                                <h3 className="font-bold text-lg mb-4 text-white">Storico Generale</h3>
+                                                {allGroupPayments.length > 0 ? (
+                                                    <ul className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                                        {allGroupPayments.map(payment => (
+                                                            <li key={payment.id} className="flex justify-between items-center text-sm bg-[#282828] p-3 rounded-lg border border-[#3E3E3E] group">
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-bold text-white">{payment.users?.name || 'Utente'}</span>
+                                                                    <span className="text-[10px] text-[#B3B3B3]">
+                                                                        Data: {new Date(payment.payment_date).toLocaleDateString('it-IT')}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="text-[10px] font-bold text-[#1DB954] bg-[#1DB954]/10 px-2 py-1 rounded-md border border-[#1DB954]/20">
+                                                                        Per: {payment.target_month !== null && payment.target_month !== undefined ? mesiCorti[payment.target_month] : 'N/D'} {payment.target_year || ''}
+                                                                    </span>
+                                                                    <span className="text-[#1DB954] font-bold">€{payment.amount.toFixed(2)}</span>
+                                                                    <button
+                                                                        onClick={() => requestDeletePayment(payment.id)}
+                                                                        className="text-red-500 bg-red-500/10 p-2 rounded-full hover:bg-red-500 hover:text-white transition-all"
+                                                                        title="Annulla incasso"
+                                                                    >
+                                                                        🗑️
+                                                                    </button>
+                                                                </div>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="text-sm text-[#B3B3B3]">Nessun incasso registrato.</p>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -481,38 +576,6 @@ export default function Dashboard() {
                     )}
                 </main>
             </div>
-
-            {/* --- MODAL DI CONFERMA --- */}
-            {confirmModal && (
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-                    <div className="bg-[#181818] border border-[#3E3E3E] p-8 rounded-2xl max-w-md w-full shadow-2xl">
-                        <h3 className="text-2xl font-bold text-white mb-3">{confirmModal.title}</h3>
-                        <p className="text-[#B3B3B3] text-md mb-8">{confirmModal.message}</p>
-                        <div className="flex gap-4 justify-end">
-                            <button
-                                onClick={() => setConfirmModal(null)}
-                                className="px-6 py-2 rounded-full text-sm font-bold text-white bg-[#282828] hover:bg-[#3E3E3E] transition-colors"
-                            >
-                                Annulla
-                            </button>
-                            <button
-                                onClick={confirmModal.action}
-                                className="px-6 py-2 rounded-full text-sm font-bold text-black bg-[#1DB954] hover:bg-[#1ed760] transition-colors shadow-[0_0_10px_rgba(29,185,84,0.4)]"
-                            >
-                                Conferma
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* --- TOAST NOTIFICATIONS --- */}
-            {toast && (
-                <div className={`fixed bottom-8 right-8 px-6 py-4 rounded-xl shadow-2xl border z-50 flex items-center gap-3 transition-all animate-bounce ${toast.type === 'success' ? 'bg-[#181818] border-[#1DB954] text-[#1DB954]' : 'bg-red-950 border-red-500 text-red-200'}`}>
-                    <span className="text-2xl">{toast.type === 'success' ? '✅' : '⚠️'}</span>
-                    <p className="font-bold text-md">{toast.message}</p>
-                </div>
-            )}
         </div>
     )
 }

@@ -1,5 +1,7 @@
 import './globals.css'
 import type { Metadata } from 'next'
+import { ToastProvider } from '@/components/ToastContext'
+import OneSignalInitializer from '@/components/OneSignalInitializer'
 
 export const metadata: Metadata = {
   title: 'SpotiShare',
@@ -14,7 +16,10 @@ export default function RootLayout({
   return (
     <html lang="it">
       <body style={{ margin: 0, padding: 0, backgroundColor: '#121212' }}>
-        {children}
+        <ToastProvider>
+          <OneSignalInitializer />
+          {children}
+        </ToastProvider>
       </body>
     </html>
   )

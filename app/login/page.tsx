@@ -2,9 +2,11 @@
 
 import { useState } from 'react'
 import { supabase } from '../../utils/supabase'
+import { useToast } from '@/components/ToastContext'
 
 export default function Login() {
     const [loading, setLoading] = useState(false)
+    const { showToast } = useToast()
 
     const handleSpotifyLogin = async (e: any) => {
         e.preventDefault()
@@ -14,24 +16,22 @@ export default function Login() {
             const { data, error } = await supabase.auth.signInWithOAuth({
                 provider: 'spotify',
                 options: {
-                    // 1. Diciamo a Supabase di NON fare il redirect automatico (che si stava bloccando)
                     skipBrowserRedirect: true,
                     redirectTo: `${window.location.origin}/dashboard`
                 }
             })
 
             if (error) {
-                alert("Errore da Supabase: " + error.message)
+                showToast("Errore da Supabase: " + error.message, 'error')
                 setLoading(false)
             } else if (data?.url) {
-                // 2. FORZIAMO IL BROWSER AD ANDARE SU SPOTIFY!
                 window.location.href = data.url
             } else {
-                alert("Errore strano: Nessun link ricevuto.")
+                showToast("Errore strano: Nessun link ricevuto.", 'error')
                 setLoading(false)
             }
         } catch (err: any) {
-            alert("Errore nel codice: " + err.message)
+            showToast("Errore nel codice: " + err.message, 'error')
             setLoading(false)
         }
     }
