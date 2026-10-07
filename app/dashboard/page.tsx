@@ -716,13 +716,6 @@ export default function Dashboard() {
                                 </div>
                             )}
                         </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-20 text-center">
-                            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4 animate-bounce">⏳</div>
-                            <p className="text-zinc-400 font-medium">
-                                {loadingPlans ? 'Sincronizzazione dashboard...' : 'Nessun piano associato trovato.'}
-                            </p>
-                        </div>
                     )
                 }
             </main>
