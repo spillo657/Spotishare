@@ -86,7 +86,7 @@ export default function Dashboard() {
     }
 
     const fetchAllGroupPayments = async (planId: string) => {
-        const { data } = await supabase.from('payments').select(`*, users ( name )`).eq('plan_id', planId).order('payment_date', { ascending: false })
+        const { data } = await supabase.from('payments').select(\`\*, users ( name )\`).eq('plan_id', planId).order('payment_date', { ascending: false })
         if (data) setAllGroupPayments(data)
     }
 
@@ -118,34 +118,60 @@ export default function Dashboard() {
 
     useEffect(() => {
         const fetchUserDataAndPlans = async (authUser: any) => {
-            const { data: userData } = await supabase
-                .from('users')
-                .upsert({
-                    id: authUser.id,
-                    email: authUser.email,
-                    name: authUser.user_metadata?.full_name || 'Utente Spotify',
-                    spotify_id: authUser.user_metadata?.provider_id || null
-                }, { onConflict: 'id' })
-                .select('plan_id, role')
-                .single()
+            try {
+                // 1. Recupera l'utente
+                const { data: userData, error: userError } = await supabase
+                    .from('users')
+                    .select('plan_id, role')
+                    .eq('id', authUser.id)
+                    .single();
 
-            if (userData) {
-                setDbStatus("✅ Online")
-                setUserPlanId(userData.plan_id)
-                setUserRole(userData.role || 'user')
-
-                if (userData.plan_id) {
-                    fetchGroupMembers(userData.plan_id)
-                    if (userData.role === 'admin') fetchAllGroupPayments(userData.plan_id)
+                if (userError && userError.code !== 'PGRST116') {
+                    console.error("Error fetching user:", userError);
                 }
+
+                let currentUserData = userData;
+
+                // 2. Se l'utente non esiste nel DB (PGRST116), lo crea
+                if (!userData) {
+                    const { data: newUser, error: insertError } = await supabase
+                        .from('users')
+                        .insert({
+                            id: authUser.id,
+                            email: authUser.email,
+                            name: authUser.user_metadata?.full_name || 'Utente Spotify',
+                            spotify_id: authUser.user_metadata?.provider_id || null
+                        })
+                        .select('plan_id, role')
+                        .single();
+
+                    if (insertError) {
+                        console.error("Error creating user record:", insertError);
+                    } else {
+                        currentUserData = newUser;
+                    }
+                }
+
+                if (currentUserData) {
+                    setDbStatus("✅ Online")
+                    setUserPlanId(currentUserData.plan_id)
+                    setUserRole(currentUserData.role || 'user')
+
+                    if (currentUserData.plan_id) {
+                        fetchGroupMembers(currentUserData.plan_id)
+                        if (currentUserData.role === 'admin') fetchAllGroupPayments(currentUserData.plan_id)
+                    }
+                }
+                fetchPayments(authUser.id)
+                const { data: plansData } = await supabase.from('plans').select('*')
+                if (plansData) setPlans(plansData)
+            } catch (error: any) {
+                console.error("Unexpected error in fetchUserDataAndPlans:", error);
+                showToast("Errore imprevisto nel caricamento dati", "error");
+            } finally {
+                setLoadingPlans(false)
             }
-            fetchPayments(authUser.id)
-            const { data: plansData } = await supabase.from('plans').select('*')
-            if (plansData) setPlans(plansData)
-        } finally {
-            setLoadingPlans(false)
         }
-    }
 
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) {
@@ -192,7 +218,7 @@ export default function Dashboard() {
             const { data: planData, error: planError } = await supabase
                 .from('plans')
                 .insert({
-                    name: `${user?.user_metadata?.full_name || 'Il Mio'} Gruppo`,
+                    name: \`\${user?.user_metadata?.full_name || 'Il Mio'} Gruppo\`,
                     monthly_cost: cost,
                     max_members: maxMembers,
                     invite_code: inviteCode
@@ -217,7 +243,7 @@ export default function Dashboard() {
             const { data: membersData } = await supabase.from('users').select('*').eq('plan_id', planData.id);
             if (membersData) setMembers(membersData);
 
-            const { data: paymentsData } = await supabase.from('payments').select(`*, users ( name )`).eq('plan_id', planData.id).order('payment_date', { ascending: false });
+            const { data: paymentsData } = await supabase.from('payments').select(\`\*, users ( name )\`).eq('plan_id', planData.id).order('payment_date', { ascending: false });
             if (paymentsData) setAllGroupPayments(paymentsData);
 
         } catch (error: any) {
@@ -237,7 +263,7 @@ export default function Dashboard() {
         setConfirmModal({
             isOpen: true,
             title: "Conferma Pagamento",
-            message: `Stai per versare la quota di €${quota} per saldare il mese di ${targetMonthName} ${selectedTargetYear}. Confermi?`,
+            message: \`Stai per versare la quota di €\${quota} per saldare il mese di \${targetMonthName} \${selectedTargetYear}. Confermi?\`,
             action: async () => {
                 setIsPaying(true)
                 const { error } = await supabase.from('payments').insert({
@@ -249,7 +275,7 @@ export default function Dashboard() {
                 })
 
                 if (!error) {
-                    showToast(`💸 Pagamento per ${targetMonthName} registrato!`, 'success')
+                    showToast(\`💸 Pagamento per \${targetMonthName} registrato!\`, 'success')
                     fetchPayments(user.id)
                     if (userRole === 'admin') fetchAllGroupPayments(userPlanId!)
                 } else {
@@ -271,7 +297,7 @@ export default function Dashboard() {
         setConfirmModal({
             isOpen: true,
             title: "Registra Incasso Manuale",
-            message: `Vuoi confermare di aver ricevuto €${quota} da ${memberName} per il mese di ${targetMonthName} ${selectedTargetYear}?`,
+            message: \`Vuoi confermare di aver ricevuto €\${quota} da \${memberName} per il mese di \${targetMonthName} \${selectedTargetYear}?\`,
             action: async () => {
                 const { error } = await supabase.from('payments').insert({
                     user_id: memberId,
@@ -281,7 +307,7 @@ export default function Dashboard() {
                     target_year: selectedTargetYear
                 })
                 if (!error) {
-                    showToast(`✅ Incasso di ${targetMonthName} registrato per ${memberName}`, 'success')
+                    showToast(\`✅ Incasso di \${targetMonthName} registrato per \${memberName}\`, 'success')
                     fetchAllGroupPayments(userPlanId!)
                 } else {
                     showToast("Errore di registrazione", 'error')
@@ -345,7 +371,7 @@ export default function Dashboard() {
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-green-500/10 blur-[120px] rounded-full pointer-events-none"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full pointer-events-none"></div>
 
-            <style jsx>{`
+            <style jsx={\`
                 @keyframes shimmer {
                     0% { background-position: -200% 0; }
                     100% { background-position: 200% 0; }
@@ -355,7 +381,7 @@ export default function Dashboard() {
                     background-size: 200% 100%;
                     animation: shimmer 3s infinite linear;
                 }
-            `}</style>
+            \`}</style>
 
             <div className="max-w-5xl mx-auto relative z-10">
 
@@ -365,7 +391,7 @@ export default function Dashboard() {
                         <span className="text-2xl">🔔</span>
                         <div>
                             <p className="font-extrabold tracking-tight text-amber-500 text-sm">Scadenza Imminente</p>
-                            <p className="text-xs text-zinc-400 leading-relaxed">Il rinnovo Spotify è tra {deadline.daysLeft} {deadline.daysLeft === 1 ? 'giorno' : 'giorni'}. Assicurati di avere fondi sulla carta!</p>
+                            <p className="text-xs text-zinc-400 leading-relaxed">Il rinnovo Spotify è tra \${deadline.daysLeft} \${deadline.daysLeft === 1 ? 'giorno' : 'giorni'}. Assicurati di avere fondi sulla carta!</p>
                         </div>
                     </div>
                 )}
@@ -378,14 +404,14 @@ export default function Dashboard() {
                         <div className="text-right">
                             <p className="font-bold flex items-center justify-end gap-2 text-zinc-100">
                                 <a href="/profile" className="hover:text-green-400 transition-colors">
-                                    {user.user_metadata?.full_name || 'Utente'}
+                                    \${user.user_metadata?.full_name || 'Utente'}
                                 </a>
                                 {userRole === 'admin' && (
                                     <span className="bg-red-500/20 text-red-400 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-widest font-semibold border border-red-500/30">Admin</span>
                                 )}
                             </p>
                             <p className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 flex items-center justify-end gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> {dbStatus}
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> \${dbStatus}
                             </p>
                         </div>
                     )}
@@ -398,13 +424,13 @@ export default function Dashboard() {
 
                                 {/* --- LA TUA CASSA (Hero Element) --- */}
                                 <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl ring-1 ring-white/5 p-8 relative overflow-hidden flex flex-col justify-between shadow-[0_0_40px_-10px_rgba(29,185,84,0.3)]">
-                                    <div className={`absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-20 ${deadline.daysLeft <= 3 ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                                    <div className={\`absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-20 \${deadline.daysLeft <= 3 ? 'bg-red-500' : 'bg-green-500'}\`}></div>
 
                                     <div className="relative z-10">
                                         <div className="flex justify-between items-center mb-8">
                                             <h2 className="text-xl font-extrabold tracking-tight text-zinc-100">La tua Cassa</h2>
                                             <span className="text-[10px] uppercase tracking-widest font-semibold bg-white/10 px-3 py-1 rounded-full text-zinc-400 border border-white/10">
-                                                Tot: €{totalUserPaid.toFixed(2)}
+                                                Tot: €\${totalUserPaid.toFixed(2)}
                                             </span>
                                         </div>
 
@@ -431,12 +457,12 @@ export default function Dashboard() {
                                                         strokeDasharray={circumference}
                                                         strokeDashoffset={offset}
                                                         strokeLinecap="round"
-                                                        className={`${deadline.daysLeft <= 3 ? 'text-red-500' : 'text-green-500'} transition-all duration-1000 ease-in-out`}
+                                                        className={\`\${deadline.daysLeft <= 3 ? 'text-red-500' : 'text-green-500'} transition-all duration-1000 ease-in-out\`}
                                                     />
                                                 </svg>
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                    <span className={`text-4xl font-black ${deadline.daysLeft <= 3 ? 'text-red-500' : 'text-zinc-100'}`}>
-                                                        {deadline.daysLeft}
+                                                    <span className={\`text-4xl font-black \${deadline.daysLeft <= 3 ? 'text-red-500' : 'text-zinc-100'}\`}>
+                                                        \${deadline.daysLeft}
                                                     </span>
                                                     <span className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Giorni</span>
                                                 </div>
@@ -444,8 +470,8 @@ export default function Dashboard() {
 
                                             <div>
                                                 <p className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Prossima Scadenza</p>
-                                                <p className="text-2xl font-extrabold tracking-tight text-zinc-100">{deadline.dateString}</p>
-                                                <p className="text-sm text-zinc-400 mt-1 italic">Quota: €{(myPlan.monthly_cost / myPlan.max_members).toFixed(2)}</p>
+                                                <p className="text-2xl font-extrabold tracking-tight text-zinc-100">\${deadline.dateString}</p>
+                                                <p className="text-sm text-zinc-400 mt-1 italic">Quota: €\${(myPlan.monthly_cost / myPlan.max_members).toFixed(2)}</p>
                                             </div>
                                         </div>
 
@@ -453,9 +479,9 @@ export default function Dashboard() {
                                         <div className="mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl backdrop-blur-md">
                                             <div className="flex justify-between items-center">
                                                 <span className="text-[10px] uppercase tracking-widest font-semibold text-red-400">Situazione Debiti</span>
-                                                <span className={`text-xs font-bold ${calculateUserDebt(user?.id, payments) > 0 ? 'text-red-500' : 'text-green-400'}`}>
-                                                    {calculateUserDebt(user?.id, payments) > 0
-                                                        ? `Mancano ${calculateUserDebt(user?.id, payments)} mese${calculateUserDebt(user?.id, payments) > 1 ? 's' : ''}`
+                                                <span className={\`text-xs font-bold \${calculateUserDebt(user?.id, payments) > 0 ? 'text-red-500' : 'text-green-400'}\`}>
+                                                    \${calculateUserDebt(user?.id, payments) > 0
+                                                        ? \`Mancano \${calculateUserDebt(user?.id, payments)} mese\${calculateUserDebt(user?.id, payments) > 1 ? 's' : ''}\`
                                                         : 'Tutto in regola ✅'}
                                                 </span>
                                             </div>
@@ -492,13 +518,13 @@ export default function Dashboard() {
                                             >
                                                 <div className="absolute inset-0 animate-shimmer pointer-events-none"></div>
                                                 <span className="relative z-10 uppercase tracking-tighter">
-                                                    {isPaying ? 'ELABORAZIONE...' : `REGISTRA PAGAMENTO ${mesiCorti[selectedTargetMonth].toUpperCase()}`}
+                                                    \${isPaying ? 'ELABORAZIONE...' : \`REGISTRA PAGAMENTO \${mesiCorti[selectedTargetMonth].toUpperCase()}\`}
                                                 </span>
                                             </button>
                                         </div>
 
                                         {/* GRAFICA 12 MESI (Pills) */}
-                                        <h3 className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mt-10 mb-4 border-b border-white/10 pb-2">Status Pagamenti {selectedTargetYear}</h3>
+                                        <h3 className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mt-10 mb-4 border-b border-white/10 pb-2">Status Pagamenti \${selectedTargetYear}</h3>
                                         <div className="flex overflow-x-auto pb-4 gap-3 custom-scrollbar snap-x">
                                             {mesiCorti.map((mese, index) => {
                                                 const isPaid = checkMonthPaid(index, selectedTargetYear, payments);
@@ -507,16 +533,16 @@ export default function Dashboard() {
                                                 return (
                                                     <div
                                                         key={mese}
-                                                        className={`snap-start min-w-[80px] p-3 rounded-full border text-center flex flex-col items-center justify-center transition-all
-                                                            ${isPaid
+                                                        className={\`snap-start min-w-[80px] p-3 rounded-full border text-center flex flex-col items-center justify-center transition-all
+                                                            \${isPaid
                                                                 ? 'bg-green-500/20 text-green-400 border-green-500/30'
                                                                 : isCurrentMonth
                                                                     ? 'animate-pulse bg-amber-500/10 text-amber-500 border-amber-500/30'
                                                                     : 'bg-transparent text-zinc-600 border-white/10'
-                                                            }`}
+                                                            }\`}
                                                     >
-                                                        <span className="text-[9px] uppercase font-bold mb-1">{mese}</span>
-                                                        <span className="text-lg">{isPaid ? '✅' : isCurrentMonth ? '🔔' : '⏳'}</span>
+                                                        <span className="text-[9px] uppercase font-bold mb-1">\${mese}</span>
+                                                        <span className="text-lg">\${isPaid ? '✅' : isCurrentMonth ? '🔔' : '⏳'}</span>
                                                     </div>
                                                 )
                                             })}
@@ -532,13 +558,13 @@ export default function Dashboard() {
                                             {members.map((member) => (
                                                 <li key={member.id} className="p-4 flex items-center gap-4 hover:bg-white/5 transition-all rounded-2xl group">
                                                     <div className="w-12 h-12 rounded-full bg-white/10 border border-white/10 text-green-400 flex items-center justify-center font-bold text-xl shadow-inner group-hover:scale-110 transition-transform">
-                                                        {member.name ? member.name.charAt(0).toUpperCase() : '?'}
+                                                        \${member.name ? member.name.charAt(0).toUpperCase() : '?'}
                                                     </div>
                                                     <div className="flex-grow">
                                                         <p className="font-bold text-zinc-100 flex items-center gap-2">
-                                                            {member.name} {member.id === user?.id && <span className="text-green-400 text-[9px] border border-green-400/50 px-2 py-0.5 rounded-full uppercase tracking-widest">Tu</span>}
+                                                            \${member.name} \${member.id === user?.id && <span className="text-green-400 text-[9px] border border-green-400/50 px-2 py-0.5 rounded-full uppercase tracking-widest">Tu</span>}
                                                         </p>
-                                                        <p className="text-zinc-400 text-xs">{member.email}</p>
+                                                        <p className="text-zinc-400 text-xs">\${member.email}</p>
                                                     </div>
                                                 </li>
                                             ))}
@@ -556,7 +582,7 @@ export default function Dashboard() {
                                         </h2>
                                         <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-md shadow-lg">
                                             <span className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mr-3">Cassa Totale:</span>
-                                            <span className="text-2xl font-black text-zinc-100">€{totalGroupPaid.toFixed(2)}</span>
+                                            <span className="text-2xl font-black text-zinc-100">€\${totalGroupPaid.toFixed(2)}</span>
                                         </div>
                                     </div>
 
@@ -574,7 +600,7 @@ export default function Dashboard() {
                                                     }}
                                                     className="text-xs text-green-400 hover:text-green-300 font-semibold transition-colors"
                                                 >
-                                                    {isManagingPlan ? 'Annulla' : 'Modifica'}
+                                                    \${isManagingPlan ? 'Annulla' : 'Modifica'}
                                                 </button>
                                             </div>
 
@@ -609,22 +635,22 @@ export default function Dashboard() {
                                                 <div className="space-y-3">
                                                     <div className="flex justify-between text-sm p-3 bg-white/5 rounded-xl border border-white/5">
                                                         <span className="text-zinc-400">Costo Mensile:</span>
-                                                        <span className="font-bold text-zinc-100">€{myPlan?.monthly_cost.toFixed(2)}</span>
+                                                        <span className="font-bold text-zinc-100">€\${myPlan?.monthly_cost.toFixed(2)}</span>
                                                     </div>
                                                     <div className="flex justify-between text-sm p-3 bg-white/5 rounded-xl border border-white/5">
                                                         <span className="text-zinc-400">Membri Max:</span>
-                                                        <span className="font-bold text-zinc-100">{myPlan?.max_members}</span>
+                                                        <span className="font-bold text-zinc-100">\${myPlan?.max_members}</span>
                                                     </div>
                                                 </div>
                                             )}
 
                                             <div className="mt-10 pt-8 border-t border-white/10">
                                                 <h3 className="font-extrabold text-lg mb-2 text-zinc-100">Registra Incasso Manuale</h3>
-                                                <p className="text-xs text-zinc-400 mb-6 leading-relaxed">Segna i pagamenti contanti per il mese selezionato nella tua cassa ({mesi[selectedTargetMonth]} {selectedTargetYear}).</p>
+                                                <p className="text-xs text-zinc-400 mb-6 leading-relaxed">Segna i pagamenti contanti per il mese selezionato nella tua cassa (\${mesi[selectedTargetMonth]} \${selectedTargetYear}).</p>
                                                 <ul className="space-y-3">
                                                     {members.map(member => (
                                                         <li key={member.id} className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5 hover:border-green-500/30 transition-all group">
-                                                            <span className="font-semibold text-zinc-200">{member.name}</span>
+                                                            <span className="font-semibold text-zinc-200">\${member.name}</span>
                                                             <button
                                                                 onClick={() => requestAdminAddPayment(member.id, member.name)}
                                                                 className="text-[10px] bg-transparent border border-green-500/50 text-green-400 font-bold px-4 py-2 rounded-full hover:bg-green-500 hover:text-black transition-all active:scale-95"
@@ -644,7 +670,7 @@ export default function Dashboard() {
                                                     <p className="text-xs text-zinc-400 mb-4 leading-relaxed">Condividi questo link per permettere ad altri di unirsi al tuo gruppo.</p>
                                                     <div className="flex items-center gap-2 bg-black/40 p-3 rounded-2xl border border-white/10 shadow-inner">
                                                         <code className="flex-grow text-green-400 font-mono text-xs truncate">
-                                                            {`${window.location.origin}/join/${myPlan?.invite_code || 'generazione...'}`}
+                                                            \${window.location.origin}/join/\${myPlan?.invite_code || 'generazione...'}
                                                         </code>
                                                         <button
                                                             onClick={async () => {
@@ -657,7 +683,7 @@ export default function Dashboard() {
                                                                     showToast("Errore nella generazione del codice", "error");
                                                                     return;
                                                                 }
-                                                                navigator.clipboard.writeText(`${window.location.origin}/join/${code}`);
+                                                                navigator.clipboard.writeText(\`\${window.location.origin}/join/\${code}\`);
                                                                 showToast("Link copiato negli appunti!", "success");
                                                                 // Refresh state to show the new code
                                                                 setPlans(prev => prev.map(p => p.id === myPlan?.id ? { ...p, invite_code: code } : p));
@@ -675,16 +701,16 @@ export default function Dashboard() {
                                                             {allGroupPayments.map(payment => (
                                                                 <li key={payment.id} className="flex justify-between items-center text-sm bg-white/5 p-4 rounded-2xl border border-white/5 hover:border-white/10 transition-all group">
                                                                     <div className="flex flex-col">
-                                                                        <span className="font-bold text-zinc-100">{payment.users?.name || 'Utente'}</span>
+                                                                        <span className="font-bold text-zinc-100">\${payment.users?.name || 'Utente'}</span>
                                                                         <span className="text-[10px] text-zinc-500">
-                                                                            Data: {new Date(payment.payment_date).toLocaleDateString('it-IT')}
+                                                                            Data: \${new Date(payment.payment_date).toLocaleDateString('it-IT')}
                                                                         </span>
                                                                     </div>
                                                                     <div className="flex items-center gap-4">
                                                                         <span className="text-[9px] font-bold text-green-400 bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20 uppercase tracking-widest">
-                                                                            {payment.target_month !== null && payment.target_month !== undefined ? mesiCorti[payment.target_month] : 'N/D'} {payment.target_year || ''}
+                                                                            \${payment.target_month !== null && payment.target_month !== undefined ? mesiCorti[payment.target_month] : 'N/D'} \${payment.target_year || ''}
                                                                         </span>
-                                                                        <span className="text-green-400 font-black">€{payment.amount.toFixed(2)}</span>
+                                                                        <span className="text-green-400 font-black">€\${payment.amount.toFixed(2)}</span>
                                                                         <button
                                                                             onClick={() => requestDeletePayment(payment.id)}
                                                                             className="text-red-400 bg-red-500/10 p-2 rounded-full hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100"
@@ -708,17 +734,17 @@ export default function Dashboard() {
                         </>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-20 text-center">
-                {loadingPlans ? (
-                    <>
-                        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4 animate-bounce">⏳</div>
-                        <p className="text-zinc-400 font-medium">Sincronizzazione dashboard...</p>
-                    </>
-                ) : (
-                    <>
-                        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4">❌</div>
-                        <p className="text-zinc-400 font-medium">Nessun piano associato trovato.</p>
-                    </>
-                )}
+                            {loadingPlans ? (
+                                <>
+                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4 animate-bounce">⏳</div>
+                                    <p className="text-zinc-400 font-medium">Sincronizzazione dashboard...</p>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4">❌</div>
+                                    <p className="text-zinc-400 font-medium">Nessun piano associato trovato.</p>
+                                </>
+                            )}
                             {(!userPlanId) && (
                                 <div className="mt-6 p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md max-w-md">
                                     <h3 className="text-xl font-bold text-zinc-100 mb-2">Inizia con SpotiShare</h3>
@@ -777,5 +803,5 @@ export default function Dashboard() {
             </main>
         </div>
     </div>
-    )
+)
 }
