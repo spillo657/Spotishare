@@ -7,22 +7,23 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/dashboard'
 
   if (code) {
-    const cookieStore = request.cookies
+    const response = NextResponse.next({
+      request: {
+        headers: request.headers,
+      },
+    })
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll() {
-            return cookieStore.getAll()
+            return request.cookies.getAll()
           },
           setAll(cookiesToSet) {
             cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-            NextResponse.next({
-              request: {
-                headers: request.headers,
-              },
-            })
+            response.cookies.set(name, value, options)
           },
         },
       }
@@ -30,18 +31,16 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      // Create a response that redirects to the dashboard (or the 'next' param)
-      const response = NextResponse.redirect(`${origin}${next}`)
-
-      // Important: the cookies from exchangeCodeForSession must be passed to the response
-      // Since the createServerClient's setAll updates the request,
-      // we need to make sure they are also on the response.
-      // However, with @supabase/ssr and the current pattern,
-      // we can simply return the redirect.
-      return response
+      const redirectResponse = NextResponse.redirect(`${origin}${next}`)
+      // Copy cookies from the temporary response to the final redirect
+      response.cookies.getAll().forEach(cookie => {
+        redirectResponse.cookies.set(cookie.name, cookie.value)
+      })
+      return redirectResponse
     }
+
+    console.error('Auth exchange error:', error)
   }
 
-  // Return the user to an error page or login if something went wrong
   return NextResponse.redirect(`${origin}/login?error=auth-failed`)
 }
