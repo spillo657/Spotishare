@@ -102,12 +102,16 @@ export default function Dashboard() {
                 .select()
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                console.error("Supabase error during invite code generation:", error);
+                throw error;
+            }
             // Update local state to avoid re-fetching
             setPlans(prev => prev.map(p => p.id === plan.id ? { ...p, invite_code: newCode } : p));
             return newCode;
         } catch (error: any) {
             console.error("Error generating invite code:", error);
+            showToast("Errore Supabase: " + (error.message || "Permessi insufficienti per aggiornare il codice"), 'error');
             return null;
         }
     }
