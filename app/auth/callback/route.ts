@@ -7,11 +7,7 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/dashboard'
 
   if (code) {
-    const response = NextResponse.next({
-      request: {
-        headers: request.headers,
-      },
-    })
+    const response = NextResponse.redirect(`${origin}${next}`)
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,7 +19,6 @@ export async function GET(request: NextRequest) {
           },
           setAll(cookiesToSet) {
             cookiesToSet.forEach(({ name, value, options }) => {
-              request.cookies.set(name, value)
               response.cookies.set(name, value, options)
             })
           },
@@ -33,12 +28,7 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      const redirectResponse = NextResponse.redirect(`${origin}${next}`)
-      // Copy cookies from the temporary response to the final redirect
-      response.cookies.getAll().forEach(cookie => {
-        redirectResponse.cookies.set(cookie.name, cookie.value)
-      })
-      return redirectResponse
+      return response
     }
 
     console.error('Auth exchange error:', error)
