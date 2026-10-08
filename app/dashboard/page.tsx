@@ -1130,38 +1130,94 @@ export default function Dashboard() {
                                     </div>
 
                                     {/* INVITO NUOVI MEMBRI */}
-                                    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-xl ring-1 ring-white/5">
-                                        <h3 className="font-extrabold text-sm mb-1 text-zinc-100 flex items-center gap-2">
-                                            <span>🔗</span> Invita nuovi Membri
-                                        </h3>
-                                        <p className="text-xs text-zinc-400 mb-3">Condividi questo link per far unire un amico al gruppo.</p>
-                                        <div className="flex items-center gap-2 bg-black/40 p-2.5 rounded-2xl border border-white/10">
-                                            <code className="flex-grow text-green-400 font-mono text-xs truncate px-1">
-                                                {`${getCanonicalAppUrl()}/join/${myPlan?.invite_code || 'generazione...'}`}
-                                            </code>
-                                            <button
-                                                onClick={async () => {
-                                                    let code = myPlan?.invite_code;
-                                                    if (!code) {
-                                                        showToast("Generazione codice in corso...", "info");
-                                                        code = await ensureInviteCode(myPlan);
-                                                    }
-                                                    if (!code) {
-                                                        showToast("Errore nella generazione del codice", "error");
-                                                        return;
-                                                    }
-                                                    const canonicalInviteUrl = `${getCanonicalAppUrl()}/join/${code}`;
-                                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                                                        navigator.clipboard.writeText(canonicalInviteUrl);
-                                                    }
-                                                    showToast("Link d'invito copiato negli appunti!", "success");
-                                                    triggerConfetti();
-                                                    setPlans(prev => prev.map(p => p.id === myPlan?.id ? { ...p, invite_code: code } : p));
-                                                }}
-                                                className="bg-green-500 text-black text-xs font-bold px-4 py-2 rounded-xl hover:bg-green-400 transition-all active:scale-95 shadow-md shrink-0 cursor-pointer"
-                                            >
-                                                Copia Link
-                                            </button>
+                                    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 sm:p-6 shadow-xl ring-1 ring-white/5 space-y-4">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="font-extrabold text-sm text-zinc-100 flex items-center gap-2">
+                                                    <span>🔗</span> Invita nuovi Membri nel Gruppo
+                                                </h3>
+                                                <p className="text-xs text-zinc-400 mt-0.5">Condividi il codice o il link diretto per far entrare un amico nel gruppo.</p>
+                                            </div>
+                                            <span className="text-xl">🎟️</span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                                            {/* BOX 1: CODICE D'INVITO A 6 CARATTERI */}
+                                            <div className="bg-black/50 border border-green-500/30 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-inner">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] uppercase font-black tracking-widest text-green-400">
+                                                        Codice d&apos;Invito
+                                                    </span>
+                                                    <span className="text-[10px] text-zinc-500 font-mono">6 caratteri</span>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="font-mono text-xl sm:text-2xl font-black text-green-400 tracking-widest">
+                                                        {myPlan?.invite_code || '---'}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                            let code = myPlan?.invite_code;
+                                                            if (!code) {
+                                                                showToast("Generazione codice in corso...", "info");
+                                                                code = await ensureInviteCode(myPlan);
+                                                            }
+                                                            if (!code) {
+                                                                showToast("Errore nella generazione del codice", "error");
+                                                                return;
+                                                            }
+                                                            if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                                                navigator.clipboard.writeText(code);
+                                                            }
+                                                            showToast(`Codice "${code}" copiato negli appunti!`, "success");
+                                                            triggerConfetti();
+                                                            setPlans(prev => prev.map(p => p.id === myPlan?.id ? { ...p, invite_code: code } : p));
+                                                        }}
+                                                        className="bg-green-500/20 hover:bg-green-500 text-green-400 hover:text-black border border-green-500/40 text-xs font-black px-4 py-2.5 rounded-xl transition-all active:scale-95 shadow-sm cursor-pointer whitespace-nowrap"
+                                                    >
+                                                        📋 Copia Codice
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* BOX 2: LINK COMPLETO */}
+                                            <div className="bg-black/50 border border-white/10 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-inner">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] uppercase font-black tracking-widest text-zinc-400">
+                                                        Link Diretto
+                                                    </span>
+                                                    <span className="text-[10px] text-zinc-500">Accesso 1-click</span>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <code className="text-zinc-300 font-mono text-xs truncate max-w-[140px] sm:max-w-[190px]">
+                                                        {`${getCanonicalAppUrl()}/join/${myPlan?.invite_code || '...'}`}
+                                                    </code>
+                                                    <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                            let code = myPlan?.invite_code;
+                                                            if (!code) {
+                                                                showToast("Generazione codice in corso...", "info");
+                                                                code = await ensureInviteCode(myPlan);
+                                                            }
+                                                            if (!code) {
+                                                                showToast("Errore nella generazione del codice", "error");
+                                                                return;
+                                                            }
+                                                            const canonicalInviteUrl = `${getCanonicalAppUrl()}/join/${code}`;
+                                                            if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                                                navigator.clipboard.writeText(canonicalInviteUrl);
+                                                            }
+                                                            showToast("Link d'invito copiato negli appunti!", "success");
+                                                            triggerConfetti();
+                                                            setPlans(prev => prev.map(p => p.id === myPlan?.id ? { ...p, invite_code: code } : p));
+                                                        }}
+                                                        className="bg-white/10 hover:bg-white/20 text-white border border-white/15 text-xs font-black px-4 py-2.5 rounded-xl transition-all active:scale-95 shadow-sm cursor-pointer whitespace-nowrap"
+                                                    >
+                                                        🔗 Copia Link
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
