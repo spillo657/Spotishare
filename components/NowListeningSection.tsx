@@ -332,11 +332,19 @@ export default function NowListeningSection({
       })
       .on('broadcast', { event: 'request_state' }, () => {
         // If another member requests current state, broadcast our current state
-        if (myCurrentStateRef.current && currentUser?.id) {
+        if (currentUser?.id) {
+          const stateToSend = myCurrentStateRef.current || {
+            memberId: currentUser.id,
+            track: NO_TRACK,
+            isPlaying: false,
+            progressSec: 0,
+            device: 'Nessun dispositivo attivo',
+            updatedAt: Date.now()
+          };
           channel.send({
             type: 'broadcast',
             event: 'track_change',
-            payload: myCurrentStateRef.current
+            payload: stateToSend
           }).catch((e: any) => console.warn('State reply error:', e));
         }
       })
@@ -490,6 +498,16 @@ export default function NowListeningSection({
           const hasManualLock = Boolean(lastManualTrackSetRef.current);
 
           if (!hasManualLock) {
+            if (currentUser?.id && myCurrentStateRef.current?.isPlaying) {
+              myCurrentStateRef.current = {
+                memberId: currentUser.id,
+                track: NO_TRACK,
+                isPlaying: false,
+                progressSec: 0,
+                device: 'Nessun dispositivo attivo',
+                updatedAt: Date.now()
+              };
+            }
             // Only clear if the self activity is explicitly without track or inactive
             setActivities((prev) =>
               prev.map((act) => {

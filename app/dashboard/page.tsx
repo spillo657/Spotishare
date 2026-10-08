@@ -81,12 +81,20 @@ export default function Dashboard() {
     const [familyAddress, setFamilyAddress] = useState<string>('Via Roma 1, 00100 Roma (RM)')
     const [isEditingAddress, setIsEditingAddress] = useState(false)
     const [addressInput, setAddressInput] = useState('')
+    const [buildStamp, setBuildStamp] = useState<{ commitSha: string; env: string; deploymentId: string; dbHostFingerprint: string } | null>(null)
 
     const mesi = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
     const mesiCorti = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic']
 
-    // --- CARICAMENTO PREFERENZE SALVATE PER IL GRUPPO ---
+    // --- CARICAMENTO PREFERENZE SALVATE PER IL GRUPPO & BUILD STAMP ---
     useEffect(() => {
+        fetch('/api/health')
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data?.stamp) setBuildStamp(data.stamp)
+            })
+            .catch(() => {})
+
         setSupportsNotifications(isNotificationSupported())
         setNotificationPermission(getNotificationPermission())
 
@@ -1542,6 +1550,23 @@ export default function Dashboard() {
                         </div>
                     )}
                 </main>
+
+                {/* FOOTER CON BUILD STAMP (CERTIFICAZIONE BUILD & BACKEND AMBIENTE) */}
+                <footer className="mt-16 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between text-[11px] text-zinc-500 gap-3 pb-8">
+                    <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500/80 animate-pulse"></span>
+                        <span>SpotiShare Live • Realtime Sincronizzato</span>
+                    </div>
+                    {buildStamp && (
+                        <div className="font-mono text-[10px] bg-white/5 border border-white/10 px-3 py-1 rounded-full text-zinc-400 flex items-center gap-2">
+                            <span>Build: <strong className="text-zinc-200">{buildStamp.commitSha}</strong></span>
+                            <span>•</span>
+                            <span>Env: <strong className="text-zinc-200">{buildStamp.env}</strong></span>
+                            <span>•</span>
+                            <span>DB: <strong className="text-zinc-200">{buildStamp.dbHostFingerprint}</strong></span>
+                        </div>
+                    )}
+                </footer>
             </div>
 
             {/* MODALE DELLE COORDINATE CARTE & BONIFICI (REVOLUT, BUDDYBANK, POSTEPAY, BPER) */}
