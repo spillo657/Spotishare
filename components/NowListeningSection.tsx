@@ -222,6 +222,26 @@ export default function NowListeningSection({
     updatedAt: number;
   } | null>(null);
 
+  // ESC key and modal scroll lock for seamless closing and interaction
+  useEffect(() => {
+    if (!showSongPickerModal) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowSongPickerModal(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [showSongPickerModal]);
+
   // Helper to determine if a member is the current user
   const checkIsSelf = useCallback((member: Member, index: number): boolean => {
     if (currentUser?.id && member.id === currentUser.id) return true;
@@ -870,7 +890,10 @@ export default function NowListeningSection({
 
   // Change current user track from catalogue or recent tracks + Broadcast to room
   const handleSelectTrackForSelf = async (track: TrackData, makeActive: boolean = true) => {
-    // 1. Optimistic UI update
+    // 1. Immediately close modal for instant feedback
+    setShowSongPickerModal(false);
+
+    // 2. Optimistic UI update
     setActivities((prev) =>
       prev.map((act) => {
         if (act.isSelf) {
@@ -886,10 +909,9 @@ export default function NowListeningSection({
       })
     );
 
-    // 2. Broadcast immediately to Admin and all group members
+    // 3. Broadcast immediately to Admin and all group members
     broadcastMyState(track, makeActive, 0, 'Spotify Web');
 
-    setShowSongPickerModal(false);
     showToast(
       makeActive
         ? `🎵 In ascolto: "${track.title}" di ${track.artist}`
@@ -898,7 +920,7 @@ export default function NowListeningSection({
     );
     if (onTriggerConfetti) onTriggerConfetti();
 
-    // 3. If makeActive, send Spotify play command
+    // 4. If makeActive, send Spotify play command in background
     if (makeActive) {
       const trackId = track.spotifyUrl.includes('/track/')
         ? track.spotifyUrl.split('/track/')[1].split('?')[0]
@@ -914,7 +936,7 @@ export default function NowListeningSection({
         setTimeout(() => pollServerSpotifyStatus(), 300);
         setTimeout(() => pollServerSpotifyStatus(), 1200);
       } catch (e) {
-        console.warn(e);
+        console.warn('API Play error:', e);
       }
     }
   };
@@ -973,8 +995,9 @@ export default function NowListeningSection({
             </div>
           </div>
           <button
+            type="button"
             onClick={handleConnectSpotifyLive}
-            className="inline-flex items-center justify-center gap-2 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-4 py-2.5 rounded-xl transition-all active:scale-95 shadow-lg shadow-[#1DB954]/25 shrink-0"
+            className="inline-flex items-center justify-center gap-2 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-4 py-2.5 rounded-xl transition-all active:scale-95 shadow-lg shadow-[#1DB954]/25 shrink-0 cursor-pointer"
           >
             <span>🎧</span>
             <span>Collega Spotify Ora</span>
@@ -1013,9 +1036,10 @@ export default function NowListeningSection({
         <div className="flex items-center gap-2.5 flex-wrap shrink-0">
           {/* Refresh Button */}
           <button
+            type="button"
             onClick={() => pollServerSpotifyStatus(true)}
             disabled={isRefreshing}
-            className="p-2 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 rounded-2xl transition-all active:scale-95 disabled:opacity-50"
+            className="p-2 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 rounded-2xl transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
             title="Aggiorna stato Spotify in tempo reale"
           >
             <span className={`inline-block text-sm ${isRefreshing ? 'animate-spin' : ''}`}>🔄</span>
@@ -1024,8 +1048,9 @@ export default function NowListeningSection({
           {/* Filter Tabs */}
           <div className="flex items-center bg-black/50 p-1 rounded-2xl border border-white/10 text-xs">
             <button
+              type="button"
               onClick={() => setFilterMode('all')}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                 filterMode === 'all'
                   ? 'bg-white/15 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
@@ -1034,8 +1059,9 @@ export default function NowListeningSection({
               Tutti ({activities.length})
             </button>
             <button
+              type="button"
               onClick={() => setFilterMode('playing')}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                 filterMode === 'playing'
                   ? 'bg-[#1DB954] text-black font-black shadow-sm shadow-[#1DB954]/20'
                   : 'text-zinc-400 hover:text-[#1DB954]'
@@ -1045,8 +1071,9 @@ export default function NowListeningSection({
               In riproduzione ({currentlyPlayingCount})
             </button>
             <button
+              type="button"
               onClick={() => setFilterMode('paused')}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                 filterMode === 'paused'
                   ? 'bg-white/15 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
@@ -1058,8 +1085,9 @@ export default function NowListeningSection({
 
           {/* Button: Choose your song / Catalog */}
           <button
+            type="button"
             onClick={() => setShowSongPickerModal(true)}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-[#1DB954] to-[#1ed760] hover:scale-105 text-black font-extrabold text-xs px-4 py-2 rounded-2xl transition-all active:scale-95 shadow-lg shadow-[#1DB954]/25"
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-[#1DB954] to-[#1ed760] hover:scale-105 text-black font-extrabold text-xs px-4 py-2.5 rounded-2xl transition-all active:scale-95 shadow-lg shadow-[#1DB954]/25 cursor-pointer"
           >
             <span>🎵</span>
             <span>I tuoi brani</span>
@@ -1147,8 +1175,9 @@ export default function NowListeningSection({
           <div className="flex items-center gap-2 flex-wrap shrink-0">
             {myActivity.isPlaying && myActivity.track.id !== 'none' ? (
               <button
+                type="button"
                 onClick={handlePauseMyPlayback}
-                className="inline-flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
+                className="inline-flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 shadow-sm cursor-pointer"
                 title="Metti in pausa la musica"
               >
                 <span>⏸️</span>
@@ -1156,8 +1185,9 @@ export default function NowListeningSection({
               </button>
             ) : (
               <button
+                type="button"
                 onClick={handlePlayMyPlayback}
-                className="inline-flex items-center gap-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 text-[#1DB954] border border-[#1DB954]/40 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
+                className="inline-flex items-center gap-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 text-[#1DB954] border border-[#1DB954]/40 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 shadow-sm cursor-pointer"
                 title="Avvia la riproduzione del brano"
               >
                 <span>▶️</span>
@@ -1167,8 +1197,9 @@ export default function NowListeningSection({
 
             {myActivity.isPlaying && (
               <button
+                type="button"
                 onClick={handleStopMyPlayback}
-                className="inline-flex items-center gap-1 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95"
+                className="inline-flex items-center gap-1 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 cursor-pointer"
                 title="Azzera e imposta nessun brano"
               >
                 <span>⏹️</span>
@@ -1177,8 +1208,9 @@ export default function NowListeningSection({
             )}
 
             <button
+              type="button"
               onClick={() => setShowSongPickerModal(true)}
-              className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white border border-white/15 text-xs font-extrabold px-3.5 py-2 rounded-xl transition-all active:scale-95"
+              className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white border border-white/15 text-xs font-extrabold px-3.5 py-2 rounded-xl transition-all active:scale-95 cursor-pointer"
             >
               <span>🎵</span>
               <span>Scegli Brano</span>
@@ -1193,8 +1225,9 @@ export default function NowListeningSection({
           <div className="py-12 text-center bg-black/20 border border-white/5 rounded-3xl">
             <p className="text-zinc-400 text-sm">Nessun membro corrisponde al filtro selezionato.</p>
             <button
+              type="button"
               onClick={() => setFilterMode('all')}
-              className="mt-3 text-xs text-[#1DB954] font-bold hover:underline"
+              className="mt-3 text-xs text-[#1DB954] font-bold hover:underline cursor-pointer"
             >
               Mostra tutti i partecipanti
             </button>
@@ -1348,9 +1381,10 @@ export default function NowListeningSection({
                     {/* Sync / Listen Together */}
                     {!act.isSelf && hasActiveSong && (
                       <button
+                        type="button"
                         onClick={() => handleSyncWithMember(act)}
                         disabled={isSyncingPlayer}
-                        className="inline-flex items-center gap-1 bg-[#1DB954]/15 hover:bg-[#1DB954] text-[#1DB954] hover:text-black border border-[#1DB954]/30 font-extrabold text-xs px-2.5 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm disabled:opacity-50"
+                        className="inline-flex items-center gap-1 bg-[#1DB954]/15 hover:bg-[#1DB954] text-[#1DB954] hover:text-black border border-[#1DB954]/30 font-extrabold text-xs px-2.5 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm disabled:opacity-50 cursor-pointer"
                         title={`Riproduci "${act.track.title}" direttamente sul tuo Spotify`}
                       >
                         <span>✨</span>
@@ -1361,8 +1395,9 @@ export default function NowListeningSection({
                     {/* Synth Preview */}
                     {hasActiveSong && (
                       <button
+                        type="button"
                         onClick={() => handlePlaySoundPreview(act)}
-                        className={`p-1.5 sm:px-2.5 sm:py-1.5 border text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center gap-1 ${
+                        className={`p-1.5 sm:px-2.5 sm:py-1.5 border text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center gap-1 cursor-pointer ${
                           isPreviewing
                             ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse'
                             : 'bg-white/5 border-white/10 text-zinc-300 hover:text-white hover:bg-white/10'
@@ -1375,8 +1410,9 @@ export default function NowListeningSection({
 
                     {/* Play/Pause Toggle */}
                     <button
+                      type="button"
                       onClick={() => handleTogglePlay(act.memberId)}
-                      className={`p-1.5 border rounded-xl transition-all text-xs ${
+                      className={`p-1.5 border rounded-xl transition-all text-xs cursor-pointer ${
                         hasActiveSong
                           ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
                           : 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
@@ -1403,8 +1439,9 @@ export default function NowListeningSection({
                     ) : (
                       act.isSelf && (
                         <button
+                          type="button"
                           onClick={() => setShowSongPickerModal(true)}
-                          className="text-xs text-zinc-400 hover:text-zinc-200 bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/10 transition-all font-bold"
+                          className="text-xs text-zinc-400 hover:text-zinc-200 bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/10 transition-all font-bold cursor-pointer"
                         >
                           Scegli
                         </button>
@@ -1421,16 +1458,18 @@ export default function NowListeningSection({
       {/* SONG PICKER & RECENT TRACKS MODAL */}
       {showSongPickerModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-150"
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-150 overflow-y-auto"
           onClick={() => setShowSongPickerModal(false)}
         >
           <div
-            className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-7 shadow-2xl max-w-xl w-full relative overflow-hidden ring-1 ring-white/10 max-h-[90vh] flex flex-col justify-between"
+            className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-7 shadow-2xl max-w-xl w-full relative overflow-hidden ring-1 ring-white/10 max-h-[90vh] flex flex-col justify-between my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-emerald-400" />
 
-            <div>
+            <div className="flex flex-col">
               {/* Modal Header */}
               <div className="flex justify-between items-start mb-4">
                 <div>
@@ -1442,8 +1481,10 @@ export default function NowListeningSection({
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowSongPickerModal(false)}
-                  className="text-zinc-400 hover:text-white p-2 rounded-full hover:bg-white/10 text-sm"
+                  className="text-zinc-400 hover:text-white p-2 rounded-2xl hover:bg-white/10 text-base transition-colors cursor-pointer"
+                  aria-label="Chiudi finestra"
                 >
                   ✕
                 </button>
@@ -1456,11 +1497,12 @@ export default function NowListeningSection({
                   <p className="text-[11px] text-zinc-400">Imposta lo stato su &quot;Nessun brano in esecuzione&quot;.</p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => {
                     handlePauseMyPlayback();
                     setShowSongPickerModal(false);
                   }}
-                  className="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-xl text-xs transition-all whitespace-nowrap active:scale-95"
+                  className="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-xl text-xs transition-all whitespace-nowrap active:scale-95 cursor-pointer"
                 >
                   ⏸️ Imposta Inattivo
                 </button>
@@ -1469,8 +1511,9 @@ export default function NowListeningSection({
               {/* Navigation Tabs */}
               <div className="flex items-center gap-2 p-1 bg-black/60 rounded-2xl border border-white/10 mb-4">
                 <button
+                  type="button"
                   onClick={() => setModalTab('recent')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     modalTab === 'recent'
                       ? 'bg-white/15 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
@@ -1480,8 +1523,9 @@ export default function NowListeningSection({
                   <span>I tuoi brani Spotify</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setModalTab('catalog')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     modalTab === 'catalog'
                       ? 'bg-white/15 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
@@ -1491,8 +1535,9 @@ export default function NowListeningSection({
                   <span>Hit & Consigliati</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setModalTab('custom')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     modalTab === 'custom'
                       ? 'bg-white/15 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
@@ -1511,9 +1556,10 @@ export default function NowListeningSection({
                       <div className="flex justify-between items-center mb-2 px-1">
                         <span className="text-xs font-bold text-zinc-300">Ascoltati di recente sul tuo account</span>
                         <button
+                          type="button"
                           onClick={fetchRecentSpotifyTracks}
                           disabled={isLoadingRecent}
-                          className="text-[11px] text-[#1DB954] hover:underline font-semibold"
+                          className="text-[11px] text-[#1DB954] hover:underline font-semibold cursor-pointer disabled:opacity-50"
                         >
                           {isLoadingRecent ? 'Caricamento...' : 'Aggiorna'}
                         </button>
@@ -1525,47 +1571,49 @@ export default function NowListeningSection({
                           <p className="text-xs text-zinc-400">Caricamento dei tuoi brani da Spotify...</p>
                         </div>
                       ) : recentTracks.length > 0 ? (
-                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1 overscroll-contain">
                           {recentTracks.map((track) => (
-                            <div
+                            <button
                               key={track.id}
+                              type="button"
                               onClick={() => handleSelectTrackForSelf(track, true)}
-                              className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-[#1DB954]/10 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group"
+                              className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-[#1DB954]/15 active:bg-[#1DB954]/25 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group text-left focus:outline-none focus:ring-2 focus:ring-[#1DB954]/60"
                             >
-                              <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex items-center gap-3 min-w-0 pointer-events-none">
                                 <img
                                   src={track.coverUrl || DEFAULT_FALLBACK_COVER}
                                   alt={track.title}
                                   referrerPolicy="no-referrer"
-                                  className="w-11 h-11 rounded-xl object-cover shrink-0 border border-white/10 shadow-md"
+                                  className="w-12 h-12 rounded-xl object-cover shrink-0 border border-white/10 shadow-md"
                                   onError={(e) => {
                                     e.currentTarget.src = DEFAULT_FALLBACK_COVER;
                                   }}
                                 />
                                 <div className="min-w-0">
-                                  <p className="text-xs font-bold text-zinc-100 truncate group-hover:text-[#1DB954]">
+                                  <p className="text-xs font-extrabold text-zinc-100 truncate group-hover:text-[#1DB954]">
                                     {track.title}
                                   </p>
-                                  <p className="text-[10px] text-zinc-400 truncate">{track.artist}</p>
+                                  <p className="text-[11px] text-zinc-400 truncate mt-0.5">{track.artist}</p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="flex items-center gap-2 shrink-0 pointer-events-none">
                                 <span className="text-[10px] font-mono font-bold text-zinc-400 bg-white/5 px-2 py-0.5 rounded-md">
                                   {formatTime(track.durationSec)}
                                 </span>
-                                <span className="text-xs text-[#1DB954] font-bold bg-[#1DB954]/15 px-3 py-1 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="text-xs text-black font-extrabold bg-[#1DB954] px-3 py-1.5 rounded-xl shadow-md transition-transform group-hover:scale-105">
                                   Ascolta ▶️
                                 </span>
                               </div>
-                            </div>
+                            </button>
                           ))}
                         </div>
                       ) : (
                         <div className="p-6 text-center bg-black/40 border border-white/10 rounded-2xl">
                           <p className="text-xs text-zinc-400 mb-2">Nessun brano recente trovato sul tuo profilo Spotify.</p>
                           <button
+                            type="button"
                             onClick={() => setModalTab('catalog')}
-                            className="text-xs text-[#1DB954] font-bold hover:underline"
+                            className="text-xs text-[#1DB954] font-bold hover:underline cursor-pointer"
                           >
                             Esplora il catalogo Hit & Consigliati →
                           </button>
@@ -1580,8 +1628,9 @@ export default function NowListeningSection({
                         Connettiti per importare automaticamente i tuoi brani recenti e sincronizzare la musica in tempo reale.
                       </p>
                       <button
+                        type="button"
                         onClick={handleConnectSpotifyLive}
-                        className="bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all shadow-lg active:scale-95"
+                        className="bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all shadow-lg active:scale-95 cursor-pointer"
                       >
                         Collega Spotify Ora
                       </button>
@@ -1603,45 +1652,46 @@ export default function NowListeningSection({
                     />
                   </div>
 
-                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1 overscroll-contain">
                     {DEFAULT_TRACK_CATALOG.filter(
                       (t) =>
                         t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         t.artist.toLowerCase().includes(searchQuery.toLowerCase())
                     ).map((track) => (
-                      <div
+                      <button
                         key={track.id}
+                        type="button"
                         onClick={() => handleSelectTrackForSelf(track, true)}
-                        className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-[#1DB954]/10 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group"
+                        className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-[#1DB954]/15 active:bg-[#1DB954]/25 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group text-left focus:outline-none focus:ring-2 focus:ring-[#1DB954]/60"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0 pointer-events-none">
                           <img
                             src={track.coverUrl || DEFAULT_FALLBACK_COVER}
                             alt={track.title}
                             referrerPolicy="no-referrer"
-                            className="w-11 h-11 rounded-xl object-cover shrink-0 border border-white/10 shadow-md"
+                            className="w-12 h-12 rounded-xl object-cover shrink-0 border border-white/10 shadow-md"
                             onError={(e) => {
                               e.currentTarget.src = DEFAULT_FALLBACK_COVER;
                             }}
                           />
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-zinc-100 truncate group-hover:text-[#1DB954]">
+                            <p className="text-xs font-extrabold text-zinc-100 truncate group-hover:text-[#1DB954]">
                               {track.title}
                             </p>
-                            <p className="text-[10px] text-zinc-400 truncate">
+                            <p className="text-[11px] text-zinc-400 truncate mt-0.5">
                               {track.artist} • <span className="text-[#1DB954]">{track.genre}</span>
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0 pointer-events-none">
                           <span className="text-[10px] font-mono font-bold text-zinc-400 bg-white/5 px-2 py-0.5 rounded-md">
                             {formatTime(track.durationSec)}
                           </span>
-                          <span className="text-xs text-[#1DB954] font-bold bg-[#1DB954]/15 px-3 py-1 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-xs text-black font-extrabold bg-[#1DB954] px-3 py-1.5 rounded-xl shadow-md transition-transform group-hover:scale-105">
                             Scegli ▶️
                           </span>
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1699,23 +1749,24 @@ export default function NowListeningSection({
                     <button
                       type="submit"
                       disabled={!customSongTitle.trim()}
-                      className="w-full bg-gradient-to-r from-[#1DB954] to-emerald-400 text-black font-extrabold py-2.5 rounded-xl text-xs hover:scale-[1.01] transition-all disabled:opacity-40 shadow-md"
+                      className="w-full bg-gradient-to-r from-[#1DB954] to-emerald-400 text-black font-extrabold py-2.5 rounded-xl text-xs hover:scale-[1.01] transition-all disabled:opacity-40 shadow-md cursor-pointer"
                     >
                       Imposta questo brano per il tuo profilo
                     </button>
                   </form>
                 </div>
               )}
+            </div>
 
-              {/* Modal Footer */}
-              <div className="mt-4 pt-3 border-t border-white/10 flex justify-end">
-                <button
-                  onClick={() => setShowSongPickerModal(false)}
-                  className="px-5 py-2 bg-white/10 hover:bg-white/15 text-zinc-300 hover:text-white font-bold rounded-xl text-xs transition-all"
-                >
-                  Chiudi
-                </button>
-              </div>
+            {/* Modal Footer */}
+            <div className="mt-4 pt-3 border-t border-white/10 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowSongPickerModal(false)}
+                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white font-bold rounded-xl text-xs transition-all active:scale-95 cursor-pointer"
+              >
+                Chiudi
+              </button>
             </div>
           </div>
         </div>
