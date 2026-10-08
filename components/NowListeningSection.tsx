@@ -187,9 +187,7 @@ export default function NowListeningSection({
 
   // Modal states
   const [showSongPickerModal, setShowSongPickerModal] = useState(false);
-  const [modalTab, setModalTab] = useState<'recent' | 'catalog' | 'custom'>('recent');
-  const [recentTracks, setRecentTracks] = useState<TrackData[]>([]);
-  const [isLoadingRecent, setIsLoadingRecent] = useState(false);
+  const [modalTab, setModalTab] = useState<'catalog' | 'custom'>('catalog');
   const [customSongTitle, setCustomSongTitle] = useState('');
   const [customSongArtist, setCustomSongArtist] = useState('');
   const [startImmediatelyOnSelect, setStartImmediatelyOnSelect] = useState(true);
@@ -594,45 +592,6 @@ export default function NowListeningSection({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [pollServerSpotifyStatus]);
-
-  // Fetch recent tracks when modal opens or user switches to 'recent' tab
-  const fetchRecentSpotifyTracks = useCallback(async () => {
-    setIsLoadingRecent(true);
-    try {
-      const headers: Record<string, string> = {};
-      let activeToken = clientSpotifyToken;
-      if (!activeToken && typeof window !== 'undefined') {
-        activeToken = localStorage.getItem('spotify_provider_token');
-      }
-      if (!activeToken && typeof document !== 'undefined') {
-        const match = document.cookie.match(/(^| )spotify_provider_token=([^;]+)/);
-        if (match) activeToken = match[2];
-      }
-      if (activeToken) {
-        headers['Authorization'] = `Bearer ${activeToken}`;
-      }
-      const res = await fetch('/api/spotify/recent', {
-        headers,
-        cache: 'no-store'
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.tracks && Array.isArray(data.tracks) && data.tracks.length > 0) {
-          setRecentTracks(data.tracks);
-        }
-      }
-    } catch (err) {
-      console.warn('Error fetching recent tracks:', err);
-    } finally {
-      setIsLoadingRecent(false);
-    }
-  }, [clientSpotifyToken]);
-
-  useEffect(() => {
-    if (showSongPickerModal) {
-      fetchRecentSpotifyTracks();
-    }
-  }, [showSongPickerModal, fetchRecentSpotifyTracks]);
 
   // Connect / Reconnect Spotify OAuth
   const handleConnectSpotifyLive = async () => {
@@ -1071,7 +1030,7 @@ export default function NowListeningSection({
     }
   };
 
-  const handleSetCustomSong = (e: React.FormEvent) => {
+  const handleSetCustomSong = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!customSongTitle.trim()) return;
 
@@ -1221,11 +1180,14 @@ export default function NowListeningSection({
           {/* Button: Choose your song / Catalog */}
           <button
             type="button"
-            onClick={() => setShowSongPickerModal(true)}
+            onClick={() => {
+              setModalTab('catalog');
+              setShowSongPickerModal(true);
+            }}
             className="inline-flex items-center gap-2 bg-gradient-to-r from-[#1DB954] to-[#1ed760] hover:scale-105 text-black font-extrabold text-xs px-4 py-2.5 rounded-2xl transition-all active:scale-95 shadow-lg shadow-[#1DB954]/25 cursor-pointer"
           >
             <span>🎵</span>
-            <span>I tuoi brani</span>
+            <span>Scegli Brano</span>
           </button>
         </div>
       </div>
@@ -1646,23 +1608,11 @@ export default function NowListeningSection({
               </div>
 
               {/* Navigation Tabs */}
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 p-1 bg-black/60 rounded-2xl border border-white/10 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setModalTab('recent')}
-                  className={`py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
-                    modalTab === 'recent'
-                      ? 'bg-white/15 text-white shadow-sm'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <span>🎧</span>
-                  <span className="truncate">Brani Spotify</span>
-                </button>
+              <div className="grid grid-cols-2 gap-2 p-1 bg-black/60 rounded-2xl border border-white/10 text-xs">
                 <button
                   type="button"
                   onClick={() => setModalTab('catalog')}
-                  className={`py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
+                  className={`py-2.5 rounded-xl font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate ${
                     modalTab === 'catalog'
                       ? 'bg-white/15 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
@@ -1674,112 +1624,21 @@ export default function NowListeningSection({
                 <button
                   type="button"
                   onClick={() => setModalTab('custom')}
-                  className={`py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
+                  className={`py-2.5 rounded-xl font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate ${
                     modalTab === 'custom'
                       ? 'bg-white/15 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   <span>✨</span>
-                  <span className="truncate">Cerca / Altro</span>
+                  <span className="truncate">Personalizzato</span>
                 </button>
               </div>
             </div>
 
             {/* SCROLLABLE BODY */}
             <div className="flex-1 overflow-y-auto min-h-0 p-5 sm:p-6 space-y-4 overscroll-contain custom-scrollbar">
-              {/* TAB 1: RECENT SPOTIFY TRACKS */}
-              {modalTab === 'recent' && (
-                <div>
-                  {isLiveSpotifyConnected ? (
-                    <div>
-                      <div className="flex justify-between items-center mb-2.5 px-1">
-                        <span className="text-xs font-bold text-zinc-300">Ascoltati di recente sul tuo account</span>
-                        <button
-                          type="button"
-                          onClick={fetchRecentSpotifyTracks}
-                          disabled={isLoadingRecent}
-                          className="text-[11px] text-[#1DB954] hover:underline font-semibold cursor-pointer disabled:opacity-50"
-                        >
-                          {isLoadingRecent ? 'Caricamento...' : 'Aggiorna'}
-                        </button>
-                      </div>
-
-                      {isLoadingRecent ? (
-                        <div className="py-12 text-center">
-                          <div className="w-8 h-8 border-2 border-[#1DB954] border-t-transparent rounded-full animate-spin mx-auto mb-2.5" />
-                          <p className="text-xs text-zinc-400">Caricamento dei tuoi brani da Spotify...</p>
-                        </div>
-                      ) : recentTracks.length > 0 ? (
-                        <div className="space-y-2">
-                          {recentTracks.map((track) => (
-                            <button
-                              key={track.id}
-                              type="button"
-                              onClick={() => handleSelectTrackForSelf(track, true)}
-                              className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-[#1DB954]/15 active:bg-[#1DB954]/25 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group text-left focus:outline-none focus:ring-2 focus:ring-[#1DB954]/60 shadow-sm"
-                            >
-                              <div className="flex items-center gap-3 min-w-0 pointer-events-none">
-                                <img
-                                  src={track.coverUrl || DEFAULT_FALLBACK_COVER}
-                                  alt={track.title}
-                                  referrerPolicy="no-referrer"
-                                  className="w-12 h-12 rounded-xl object-cover shrink-0 border border-white/10 shadow-md"
-                                  onError={(e) => {
-                                    e.currentTarget.src = DEFAULT_FALLBACK_COVER;
-                                  }}
-                                />
-                                <div className="min-w-0">
-                                  <p className="text-xs font-extrabold text-zinc-100 truncate group-hover:text-[#1DB954]">
-                                    {track.title}
-                                  </p>
-                                  <p className="text-[11px] text-zinc-400 truncate mt-0.5">{track.artist}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0 pointer-events-none">
-                                <span className="text-[10px] font-mono font-bold text-zinc-400 bg-white/5 px-2 py-0.5 rounded-md">
-                                  {formatTime(track.durationSec)}
-                                </span>
-                                <span className="text-xs text-black font-extrabold bg-[#1DB954] px-3 py-1.5 rounded-xl shadow-md transition-transform group-hover:scale-105">
-                                  Ascolta ▶️
-                                </span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-8 text-center bg-black/40 border border-white/10 rounded-2xl">
-                          <p className="text-xs text-zinc-400 mb-2">Nessun brano recente trovato sul tuo profilo Spotify.</p>
-                          <button
-                            type="button"
-                            onClick={() => setModalTab('catalog')}
-                            className="text-xs text-[#1DB954] font-bold hover:underline cursor-pointer"
-                          >
-                            Esplora il catalogo Hit & Consigliati →
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="p-8 text-center bg-black/40 border border-white/10 rounded-2xl">
-                      <span className="text-3xl block mb-2">🎧</span>
-                      <p className="text-xs font-bold text-zinc-200 mb-1">Collega il tuo account Spotify</p>
-                      <p className="text-xs text-zinc-400 mb-4">
-                        Connettiti per importare automaticamente i tuoi brani recenti e sincronizzare la musica in tempo reale.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={handleConnectSpotifyLive}
-                        className="bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all shadow-lg active:scale-95 cursor-pointer"
-                      >
-                        Collega Spotify Ora
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* TAB 2: VERIFIED CATALOGUE */}
+              {/* TAB 1: VERIFIED CATALOGUE */}
               {modalTab === 'catalog' && (
                 <div>
                   <div className="mb-3">
@@ -1804,7 +1663,7 @@ export default function NowListeningSection({
                         onClick={() => handleSelectTrackForSelf(track, true)}
                         className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-[#1DB954]/15 active:bg-[#1DB954]/25 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group text-left focus:outline-none focus:ring-2 focus:ring-[#1DB954]/60 shadow-sm"
                       >
-                        <div className="flex items-center gap-3 min-w-0 pointer-events-none">
+                        <div className="flex items-center gap-3 min-w-0">
                           <img
                             src={track.coverUrl || DEFAULT_FALLBACK_COVER}
                             alt={track.title}
@@ -1823,7 +1682,7 @@ export default function NowListeningSection({
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0 pointer-events-none">
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="text-[10px] font-mono font-bold text-zinc-400 bg-white/5 px-2 py-0.5 rounded-md">
                             {formatTime(track.durationSec)}
                           </span>
@@ -1837,7 +1696,7 @@ export default function NowListeningSection({
                 </div>
               )}
 
-              {/* TAB 3: CUSTOM TRACK FORM */}
+              {/* TAB 2: CUSTOM TRACK FORM */}
               {modalTab === 'custom' && (
                 <div>
                   <form
