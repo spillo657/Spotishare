@@ -502,7 +502,7 @@ export default function Dashboard() {
                                                     {userRole === 'admin' && member.id !== user?.id && (
                                                         <button
                                                             onClick={() => removeMember(member.id, member.name)}
-                                                            className="p-2 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                                            className="p-2 text-zinc-500 hover:text-red-400 transition-colors"
                                                             title="Rimuovi dal gruppo"
                                                         >
                                                             🗑️
