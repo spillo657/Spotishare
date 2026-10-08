@@ -6,6 +6,7 @@ import OneSignalInitializer from '@/components/OneSignalInitializer'
 export const metadata: Metadata = {
   title: 'SpotiShare',
   description: 'Gestisci il tuo abbonamento Spotify',
+  manifest: '/manifest.json',
   icons: {
     icon: [
       { url: '/favicon.ico?v=3', sizes: 'any' },
@@ -25,6 +26,9 @@ export default function RootLayout({
   return (
     <html lang="it">
       <head>
+        <meta name="theme-color" content="#0B0B0F" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <link rel="alternate icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
