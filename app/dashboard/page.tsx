@@ -43,7 +43,7 @@ export default function Dashboard() {
     const availableYears = Array.from({ length: (currentYear + 1) - startYear + 1 }, (_, i) => startYear + i);
 
     // --- STATI PER LA UI CUSTOM E MODALI ---
-    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, action: () => void } | null>(null)
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, confirmText?: string, cancelText?: string, action: () => void } | null>(null)
     const [isManagingPlan, setIsManagingPlan] = useState(false)
     const [planCost, setPlanCost] = useState('')
     const [planMaxMembers, setPlanMaxMembers] = useState('')
@@ -560,6 +560,28 @@ export default function Dashboard() {
         window.open(url, '_blank')
     }
 
+    // Funzione dedicata per permettere a qualsiasi membro di inviare messaggi all'admin per pagare Spotify
+    const sendPaymentMessageToAdmin = (type: 'paid' | 'request_coordinates' | 'custom' = 'paid') => {
+        const admin = members.find(m => m.role === 'admin') || { name: 'Amministratore' }
+        const senderName = user?.user_metadata?.full_name || user?.name || 'Membro del gruppo'
+        const quotaVal = myPlan ? (myPlan.monthly_cost / myPlan.max_members).toFixed(2) : '2.99'
+        const targetMonthName = mesi[selectedTargetMonth]
+
+        let text = ''
+        if (type === 'paid') {
+            text = `Ciao ${admin.name}! 💸 Sono ${senderName}. Ti confermo di aver saldato la mia quota Spotify di €${quotaVal} per ${targetMonthName} ${selectedTargetYear} per il gruppo "${myPlan?.name || 'SpotiShare Family'}". Fammi sapere appena ricevi l'accredito! 🙌🎶`
+        } else if (type === 'request_coordinates') {
+            text = `Ciao ${admin.name}! 🎵 Sono ${senderName} dal gruppo Spotify "${myPlan?.name || 'SpotiShare Family'}". Vorrei saldare la mia quota di €${quotaVal} per ${targetMonthName} ${selectedTargetYear}. Mi puoi inviare o confermare le tue coordinate (Revolut / IBAN)? Grazie! 💳`
+        } else {
+            text = `Ciao ${admin.name}! 🎵 Sono ${senderName} dal gruppo Spotify Family "${myPlan?.name || 'SpotiShare'}". Ti contatto per la quota e il pagamento di Spotify! 🎧`
+        }
+
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`
+        if (typeof window !== 'undefined') {
+            window.open(url, '_blank')
+        }
+    }
+
     // --- ESPORTAZIONE REPORT FINANZIARIO CSV ---
     const exportPaymentsCSV = () => {
         const dataToExport = userRole === 'admin' ? (allGroupPayments.length > 0 ? allGroupPayments : payments) : payments
@@ -649,6 +671,7 @@ export default function Dashboard() {
             isOpen: true,
             title: "Conferma Pagamento Quota",
             message: 'Stai per confermare il versamento della quota di €' + quota + ' per il mese di ' + targetMonthName + ' ' + selectedTargetYear + '. Confermi di aver inviato il pagamento?',
+            confirmText: "Conferma Pagamento",
             action: async () => {
                 setIsPaying(true)
                 const { error } = await supabase.from('payments').insert({
@@ -662,12 +685,31 @@ export default function Dashboard() {
                     showToast('💸 Pagamento per ' + targetMonthName + ' registrato!', 'success')
                     triggerConfetti()
                     fetchPayments(user.id)
-                    if (userRole === 'admin') fetchAllGroupPayments(userPlanId!)
+                    if (userRole === 'admin') {
+                        fetchAllGroupPayments(userPlanId!)
+                    } else {
+                        // Proponi subito l'invio del messaggio di conferma su WhatsApp all'Admin
+                        setTimeout(() => {
+                            setConfirmModal({
+                                isOpen: true,
+                                title: "Avvisa l'Amministratore",
+                                message: `Pagamento registrato! Vuoi inviare subito un messaggio WhatsApp all'Admin per confermare l'accredito di €${quota} per ${targetMonthName} ${selectedTargetYear}?`,
+                                confirmText: "💬 Invia su WhatsApp",
+                                cancelText: "Non ora",
+                                action: () => {
+                                    sendPaymentMessageToAdmin('paid')
+                                    setConfirmModal(null)
+                                }
+                            })
+                        }, 500)
+                    }
                 } else {
                     showToast("Errore: " + error.message, 'error')
                 }
                 setIsPaying(false)
-                setConfirmModal(null)
+                if (userRole === 'admin') {
+                    setConfirmModal(null)
+                }
             }
         })
     }
@@ -1022,6 +1064,30 @@ export default function Dashboard() {
                                                     {isPaying ? 'ELABORAZIONE...' : 'REGISTRA PAGAMENTO ' + mesiCorti[selectedTargetMonth].toUpperCase() + ' ' + selectedTargetYear}
                                                 </span>
                                             </button>
+
+                                            {/* AZIONI DIRETTE WHATSAPP PER INVIARE MESSAGGI ALL'ADMIN */}
+                                            {userRole !== 'admin' && (
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => sendPaymentMessageToAdmin('paid')}
+                                                        className="w-full inline-flex items-center justify-center gap-2 bg-[#25D366]/15 hover:bg-[#25D366] text-[#25D366] hover:text-black border border-[#25D366]/40 font-bold text-xs px-3.5 py-3 rounded-xl transition-all active:scale-95 shadow-sm"
+                                                        title="Invia un messaggio WhatsApp all'Admin per confermare il pagamento della quota"
+                                                    >
+                                                        <span>💬</span>
+                                                        <span>Notifica Pagato su WhatsApp</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => sendPaymentMessageToAdmin('request_coordinates')}
+                                                        className="w-full inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 font-bold text-xs px-3.5 py-3 rounded-xl transition-all active:scale-95 shadow-sm"
+                                                        title="Chiedi all'Admin le coordinate di pagamento (Revolut / IBAN)"
+                                                    >
+                                                        <span>💳</span>
+                                                        <span>Chiedi Coordinate all&apos;Admin</span>
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* STATUS MESI DELL'ANNO */}
@@ -1091,6 +1157,17 @@ export default function Dashboard() {
 
                                                             {/* AZIONI MEMBRO: SOLLECITO WHATSAPP E RIMOZIONE */}
                                                             <div className="flex items-center gap-1.5 shrink-0">
+                                                                {/* Tasto contatta Admin per i membri del gruppo */}
+                                                                {userRole !== 'admin' && isMemberAdmin && (
+                                                                    <button
+                                                                        onClick={() => sendPaymentMessageToAdmin('custom')}
+                                                                        className="p-2 bg-[#25D366]/15 hover:bg-[#25D366] text-[#25D366] hover:text-black rounded-xl transition-all border border-[#25D366]/30 flex items-center gap-1 text-xs font-bold"
+                                                                        title="Scrivi all'Admin su WhatsApp per Spotify"
+                                                                    >
+                                                                        <span>💬</span>
+                                                                        <span className="hidden sm:inline text-[11px]">Scrivi all&apos;Admin</span>
+                                                                    </button>
+                                                                )}
                                                                 {userRole === 'admin' && member.id !== user?.id && memberDebt > 0 && (
                                                                     <button
                                                                         onClick={() => sendWhatsAppMemberReminder(member, memberDebt, (myPlan.monthly_cost / myPlan.max_members).toFixed(2))}
@@ -1393,7 +1470,16 @@ export default function Dashboard() {
                                         <h3 className="text-xl font-extrabold text-zinc-100 flex items-center gap-2">
                                             <span>📜</span> Storico dei Tuoi Pagamenti
                                         </h3>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            {userRole !== 'admin' && (
+                                                <button
+                                                    onClick={() => sendPaymentMessageToAdmin('paid')}
+                                                    className="inline-flex items-center gap-1.5 bg-[#25D366]/15 hover:bg-[#25D366] hover:text-black text-[#25D366] border border-[#25D366]/30 text-xs font-bold px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95"
+                                                    title="Invia messaggio WhatsApp all'Admin per confermare il saldo quota"
+                                                >
+                                                    <span>💬</span> Notifica Admin
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => setShowPaymentCardsModal(true)}
                                                 className="inline-flex items-center gap-1.5 bg-green-500/10 border border-green-500/30 text-green-400 text-xs font-bold px-3.5 py-2 rounded-xl hover:bg-green-500 hover:text-black transition-all"
@@ -1786,6 +1872,34 @@ export default function Dashboard() {
                                         <button onClick={() => copyToClipboard(cardDetails.bperIban, 'IBAN BPER')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia IBAN</button>
                                     </div>
                                 </div>
+
+                                {/* SEZIONE AZIONI WHATSAPP PER I MEMBRI */}
+                                {userRole !== 'admin' && (
+                                    <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-[#25D366]/10 to-emerald-500/10 border border-[#25D366]/30 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                        <div>
+                                            <p className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                                                <span>💬</span> Hai effettuato il saldo o ti servono info?
+                                            </p>
+                                            <p className="text-[11px] text-zinc-400">Invia subito un messaggio WhatsApp precompilato all&apos;amministratore del gruppo.</p>
+                                        </div>
+                                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                                            <button
+                                                type="button"
+                                                onClick={() => sendPaymentMessageToAdmin('paid')}
+                                                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 bg-[#25D366] text-black hover:bg-[#1ebd59] font-black text-xs px-3.5 py-2 rounded-xl transition-all shadow-md active:scale-95"
+                                            >
+                                                <span>💸</span> Notifica Saldo
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => sendPaymentMessageToAdmin('request_coordinates')}
+                                                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/20 text-zinc-100 font-bold text-xs px-3.5 py-2 rounded-xl transition-all active:scale-95"
+                                            >
+                                                <span>❓</span> Chiedi Info
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
