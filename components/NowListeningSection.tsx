@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useToast } from './ToastContext';
+import { supabase } from '@/utils/supabase';
 
 export interface Member {
   id: string;
@@ -39,6 +40,39 @@ export interface MemberActivity {
 // Authentic, verified high-resolution Spotify album covers
 const DEFAULT_TRACK_CATALOG: TrackData[] = [
   {
+    id: 'sfera-calcolatrici',
+    title: 'CALCOLATRICI (feat. Geolier, Baby Gang, Guè)',
+    artist: 'Sfera Ebbasta',
+    album: 'X2VR',
+    durationSec: 204,
+    coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/a4/4f/73/a44f738c-8515-581d-e0fa-0e78c857790b/23UM1IM28532.rgb.jpg/600x600bb.jpg',
+    spotifyUrl: 'https://open.spotify.com/track/10vS59kPzN8vR4378fK8rM',
+    genre: 'Trap Italiano',
+    audioTheme: 'energetic'
+  },
+  {
+    id: '100-messaggi',
+    title: '100 MESSAGGI',
+    artist: 'Lazza',
+    album: 'LOCURA',
+    durationSec: 245,
+    coverUrl: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273baf89eb11ec7c657805d2da0',
+    spotifyUrl: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
+    genre: 'Rap Italiano',
+    audioTheme: 'energetic'
+  },
+  {
+    id: 'i-p-me-tu-p-te',
+    title: 'I P’ ME, TU P’ TE',
+    artist: 'Geolier',
+    album: 'Il Coraggio dei Bambini',
+    durationSec: 214,
+    coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/9d/7a/59/9d7a59d1-bc66-3e7f-9e83-ff7c744bfa7f/5021732285935.jpg/600x600bb.jpg',
+    spotifyUrl: 'https://open.spotify.com/track/1X45vY53H2uP87sD9yT8q9',
+    genre: 'Rap Napoletano',
+    audioTheme: 'energetic'
+  },
+  {
     id: 'birds-of-a-feather',
     title: 'BIRDS OF A FEATHER',
     artist: 'Billie Eilish',
@@ -72,17 +106,6 @@ const DEFAULT_TRACK_CATALOG: TrackData[] = [
     audioTheme: 'electronic'
   },
   {
-    id: '100-messaggi',
-    title: '100 MESSAGGI',
-    artist: 'Lazza',
-    album: 'LOCURA',
-    durationSec: 245,
-    coverUrl: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273baf89eb11ec7c657805d2da0',
-    spotifyUrl: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
-    genre: 'Rap Italiano',
-    audioTheme: 'energetic'
-  },
-  {
     id: 'die-with-a-smile',
     title: 'Die With A Smile',
     artist: 'Lady Gaga & Bruno Mars',
@@ -92,17 +115,6 @@ const DEFAULT_TRACK_CATALOG: TrackData[] = [
     spotifyUrl: 'https://open.spotify.com/track/2plbrEY59IikOBB0PD7xSu',
     genre: 'Pop Ballad',
     audioTheme: 'chill'
-  },
-  {
-    id: 'i-p-me-tu-p-te',
-    title: 'I P’ ME, TU P’ TE',
-    artist: 'Geolier',
-    album: 'Il Coraggio dei Bambini',
-    durationSec: 214,
-    coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/9d/7a/59/9d7a59d1-bc66-3e7f-9e83-ff7c744bfa7f/5021732285935.jpg/600x600bb.jpg',
-    spotifyUrl: 'https://open.spotify.com/track/1X45vY53H2uP87sD9yT8q9',
-    genre: 'Rap Napoletano',
-    audioTheme: 'energetic'
   },
   {
     id: 'sinceramente',
@@ -139,7 +151,7 @@ const DEFAULT_TRACK_CATALOG: TrackData[] = [
   }
 ];
 
-const DEFAULT_FALLBACK_COVER = 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/92/9f/69/929f69f1-9977-3a44-d674-11f70c852d1b/24UMGIM36186.rgb.jpg/600x600bb.jpg';
+const DEFAULT_FALLBACK_COVER = 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/a4/4f/73/a44f738c-8515-581d-e0fa-0e78c857790b/23UM1IM28532.rgb.jpg/600x600bb.jpg';
 
 const DEVICES = [
   'Spotify su iPhone',
@@ -172,19 +184,141 @@ export default function NowListeningSection({
   const [customSongArtist, setCustomSongArtist] = useState('');
   const [startImmediatelyOnSelect, setStartImmediatelyOnSelect] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [spotifyToken, setSpotifyToken] = useState<string | null>(null);
+  const [isLiveSpotifyConnected, setIsLiveSpotifyConnected] = useState<boolean>(false);
+  const [isSyncingPlayer, setIsSyncingPlayer] = useState<boolean>(false);
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Storage key with clean versioning
-  const storageKey = `spotishare_listening_v7_${planId || 'default'}`;
+  const storageKey = `spotishare_listening_v8_${planId || 'default'}`;
 
   // Helper to check if a member is the current user
-  const checkIsSelf = (member: Member, index: number): boolean => {
+  const checkIsSelf = useCallback((member: Member, index: number): boolean => {
     if (currentUser?.id && member.id === currentUser.id) return true;
     if (currentUser?.email && member.email && member.email.toLowerCase() === currentUser.email.toLowerCase()) return true;
     if (member.name === 'Tu') return true;
     if (index === 0 && !currentUser) return true;
     return false;
+  }, [currentUser]);
+
+  // Retrieve Spotify OAuth token from Supabase session
+  useEffect(() => {
+    const fetchSessionToken = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.provider_token) {
+          setSpotifyToken(session.provider_token);
+          setIsLiveSpotifyConnected(true);
+        }
+      } catch (e) {
+        console.warn('Error reading Spotify session token:', e);
+      }
+    };
+    fetchSessionToken();
+  }, []);
+
+  // Poll Real Spotify Web API to get the EXACT song currently playing on the user's Spotify device
+  const pollRealSpotifyPlayback = useCallback(async (token: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (res.status === 204 || res.status === 202) {
+        // Spotify is paused / no track currently active
+        setActivities(prev => prev.map(act => {
+          if (act.isSelf) {
+            return {
+              ...act,
+              isPlaying: false,
+              lastPlayedText: 'Musica in pausa su Spotify',
+              progressSec: 0
+            };
+          }
+          return act;
+        }));
+        return;
+      }
+
+      if (res.status === 401) {
+        // Token expired
+        setSpotifyToken(null);
+        setIsLiveSpotifyConnected(false);
+        return;
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.item) {
+          const item = data.item;
+          const liveTrack: TrackData = {
+            id: item.id || `spotify-${Date.now()}`,
+            title: item.name,
+            artist: item.artists?.map((a: any) => a.name).join(', ') || 'Artista Spotify',
+            album: item.album?.name || 'Album Spotify',
+            durationSec: Math.floor((item.duration_ms || 180000) / 1000),
+            coverUrl: item.album?.images?.[0]?.url || DEFAULT_FALLBACK_COVER,
+            spotifyUrl: item.external_urls?.spotify || `https://open.spotify.com/track/${item.id}`,
+            genre: 'Spotify Live',
+            audioTheme: 'energetic'
+          };
+
+          const isPlayingLive = Boolean(data.is_playing);
+          const progressLiveSec = Math.floor((data.progress_ms || 0) / 1000);
+
+          setActivities(prev => prev.map(act => {
+            if (act.isSelf) {
+              return {
+                ...act,
+                isPlaying: isPlayingLive,
+                track: liveTrack,
+                progressSec: progressLiveSec,
+                lastPlayedText: isPlayingLive ? 'In ascolto ora (Spotify Live)' : 'Musica in pausa su Spotify',
+                device: 'Spotify Live Player'
+              };
+            }
+            return act;
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn('Real Spotify polling error:', err);
+    }
+  }, []);
+
+  // Poll Spotify every 4 seconds when token is active
+  useEffect(() => {
+    if (!spotifyToken) return;
+    pollRealSpotifyPlayback(spotifyToken);
+    const interval = setInterval(() => {
+      pollRealSpotifyPlayback(spotifyToken);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [spotifyToken, pollRealSpotifyPlayback]);
+
+  // Connect Spotify OAuth with playback scopes
+  const handleConnectSpotifyLive = async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'spotify',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+          scopes: 'user-read-currently-playing user-read-playback-state user-modify-playback-state user-read-recently-played user-read-email'
+        }
+      });
+      if (error) {
+        showToast('Errore connessione: ' + error.message, 'error');
+      } else if (data?.url) {
+        window.location.href = data.url;
+      }
+    } catch (err: any) {
+      showToast('Errore imprevisto: ' + err.message, 'error');
+    }
   };
 
   // Initialize and persist member listening states
@@ -225,9 +359,9 @@ export default function NowListeningSection({
         };
       }
 
-      // If this is the current user ("Tu"), default strictly to PAUSED / STOPPED so we never fake active music!
+      // If this is the current user ("Tu"), default to Sfera Ebbasta / paused so we don't show wrong Sabrina Carpenter
       if (isSelf) {
-        const defaultUserTrack = DEFAULT_TRACK_CATALOG[0];
+        const defaultUserTrack = DEFAULT_TRACK_CATALOG[0]; // Sfera Ebbasta
         return {
           memberId: member.id,
           memberName: member.name || 'Tu',
@@ -241,8 +375,8 @@ export default function NowListeningSection({
         };
       }
 
-      // Default deterministic assignment for other simulated group members
-      const track = DEFAULT_TRACK_CATALOG[index % DEFAULT_TRACK_CATALOG.length];
+      // Default assignment for other group members
+      const track = DEFAULT_TRACK_CATALOG[(index + 1) % DEFAULT_TRACK_CATALOG.length];
       const isPlaying = index % 3 !== 2;
       const initialProgress = Math.floor(Math.random() * (track.durationSec - 40)) + 20;
 
@@ -260,7 +394,7 @@ export default function NowListeningSection({
     });
 
     setActivities(newActivities);
-  }, [members, currentUser, planId, storageKey]);
+  }, [members, currentUser, planId, storageKey, checkIsSelf]);
 
   // Timer to advance progress bars smoothly ONLY for actively playing tracks
   useEffect(() => {
@@ -308,8 +442,87 @@ export default function NowListeningSection({
   // Find the current logged-in user activity
   const myActivity = activities.find((a) => a.isSelf) || activities[0];
 
+  // REAL SPOTIFY SYNC: Send playback command to user's Spotify device and open Spotify player
+  const handleSyncWithMember = async (targetMember: MemberActivity) => {
+    if (onTriggerConfetti) onTriggerConfetti();
+    setIsSyncingPlayer(true);
+
+    const trackId = targetMember.track.spotifyUrl.includes('/track/')
+      ? targetMember.track.spotifyUrl.split('/track/')[1].split('?')[0]
+      : targetMember.track.id;
+    const trackUri = `spotify:track:${trackId}`;
+
+    let playedDirectlyOnDevice = false;
+
+    // 1. If Spotify OAuth token is available, command Spotify API to play on active device
+    if (spotifyToken) {
+      try {
+        const playRes = await fetch('https://api.spotify.com/v1/me/player/play', {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${spotifyToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            uris: [trackUri],
+            position_ms: Math.max(0, (targetMember.progressSec || 0) * 1000)
+          })
+        });
+
+        if (playRes.status === 204 || playRes.ok) {
+          playedDirectlyOnDevice = true;
+          showToast(`🎵 Brano avviato sul tuo dispositivo Spotify: "${targetMember.track.title}"!`, 'success');
+        } else if (playRes.status === 404) {
+          // No active device found
+          showToast('Nessun dispositivo Spotify attivo trovato. Apertura Spotify in corso...', 'info');
+        }
+      } catch (e) {
+        console.warn('Spotify Web API play error:', e);
+      }
+    }
+
+    // 2. Open Spotify directly (deep link & web URL) to ensure playback starts on user app/device
+    if (!playedDirectlyOnDevice) {
+      window.open(targetMember.track.spotifyUrl, '_blank');
+      showToast(`🎵 Sincronizzazione: apertura di "${targetMember.track.title}" nel tuo Spotify!`, 'success');
+    }
+
+    // 3. Update dashboard UI
+    setActivities((prev) => {
+      const updated = prev.map((act) => {
+        if (act.isSelf) {
+          return {
+            ...act,
+            isPlaying: true,
+            track: targetMember.track,
+            progressSec: targetMember.progressSec,
+            lastPlayedText: 'In ascolto ora (Sincronizzato)',
+            device: 'Spotify Group Session'
+          };
+        }
+        return act;
+      });
+      persistActivities(updated);
+      return updated;
+    });
+
+    setIsSyncingPlayer(false);
+  };
+
   // Micro-action: Stop/Pause current user playback
-  const handlePauseMyPlayback = () => {
+  const handlePauseMyPlayback = async () => {
+    // If Spotify token exists, pause on real Spotify device too
+    if (spotifyToken) {
+      try {
+        await fetch('https://api.spotify.com/v1/me/player/pause', {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${spotifyToken}` }
+        });
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
     setActivities((prev) => {
       const updated = prev.map((act) => {
         if (act.isSelf) {
@@ -324,11 +537,31 @@ export default function NowListeningSection({
       persistActivities(updated);
       return updated;
     });
-    showToast('Hai impostato il tuo stato su: Musica in Pausa ⏸️', 'info');
+    showToast('Hai messo in pausa la musica ⏸️', 'info');
   };
 
   // Micro-action: Resume/Play current user playback
-  const handlePlayMyPlayback = () => {
+  const handlePlayMyPlayback = async () => {
+    if (spotifyToken && myActivity?.track) {
+      const trackId = myActivity.track.spotifyUrl.includes('/track/')
+        ? myActivity.track.spotifyUrl.split('/track/')[1].split('?')[0]
+        : myActivity.track.id;
+      try {
+        await fetch('https://api.spotify.com/v1/me/player/play', {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${spotifyToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            uris: [`spotify:track:${trackId}`]
+          })
+        });
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
     setActivities((prev) => {
       const updated = prev.map((act) => {
         if (act.isSelf) {
@@ -364,34 +597,6 @@ export default function NowListeningSection({
       return updated;
     });
     showToast('Musica fermata e avanzamento azzerato ⏹️', 'info');
-  };
-
-  // Micro-action: Sincronizza / Ascolta Insieme
-  const handleSyncWithMember = (targetMember: MemberActivity) => {
-    if (onTriggerConfetti) onTriggerConfetti();
-
-    setActivities((prev) => {
-      const updated = prev.map((act) => {
-        if (act.isSelf) {
-          return {
-            ...act,
-            isPlaying: true,
-            track: targetMember.track,
-            progressSec: targetMember.progressSec,
-            lastPlayedText: 'In ascolto ora',
-            device: 'Spotify Group Session'
-          };
-        }
-        return act;
-      });
-      persistActivities(updated);
-      return updated;
-    });
-
-    showToast(
-      `Sincronizzato con ${targetMember.memberName}! Ora stai ascoltando "${targetMember.track.title}".`,
-      'success'
-    );
   };
 
   // Micro-action: Toggle Play/Pause on any row
@@ -502,7 +707,7 @@ export default function NowListeningSection({
     setShowSongPickerModal(false);
     showToast(
       makeActive
-        ? `Brano impostato e in riproduzione: "${track.title}"`
+        ? `Brano impostato: "${track.title}" di ${track.artist}`
         : `Brano impostato (in pausa): "${track.title}"`,
       'success'
     );
@@ -514,14 +719,17 @@ export default function NowListeningSection({
     e.preventDefault();
     if (!customSongTitle.trim()) return;
 
+    const artistName = customSongArtist.trim() || 'Sfera Ebbasta';
+    const songTitle = customSongTitle.trim();
+
     const newTrack: TrackData = {
       id: `custom-${Date.now()}`,
-      title: customSongTitle.trim(),
-      artist: customSongArtist.trim() || 'Artista Preferito',
+      title: songTitle,
+      artist: artistName,
       album: 'Brano Personale',
       durationSec: 210,
       coverUrl: DEFAULT_FALLBACK_COVER,
-      spotifyUrl: `https://open.spotify.com/search/${encodeURIComponent(customSongTitle.trim() + ' ' + customSongArtist.trim())}`,
+      spotifyUrl: `https://open.spotify.com/search/${encodeURIComponent(songTitle + ' ' + artistName)}`,
       genre: 'Personal Track',
       audioTheme: 'energetic'
     };
@@ -557,17 +765,36 @@ export default function NowListeningSection({
             <h3 className="text-xl sm:text-2xl font-black text-zinc-100 flex items-center gap-2.5 tracking-tight">
               <span>🎧</span> In Ascolto Ora su Spotify
             </h3>
-            <span className="text-[10px] uppercase font-black tracking-wider bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 px-3 py-1 rounded-full shadow-[0_0_10px_rgba(29,185,84,0.25)]">
-              Live Group Activity
-            </span>
+            {isLiveSpotifyConnected ? (
+              <span className="text-[10px] uppercase font-black tracking-wider bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/40 px-3 py-1 rounded-full shadow-[0_0_10px_rgba(29,185,84,0.3)] flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#1DB954] animate-pulse" />
+                Spotify Live Connesso
+              </span>
+            ) : (
+              <span className="text-[10px] uppercase font-black tracking-wider bg-zinc-800 text-zinc-400 border border-white/10 px-3 py-1 rounded-full">
+                Group Activity
+              </span>
+            )}
           </div>
           <p className="text-xs text-zinc-400 mt-1">
-            Visualizza e controlla l'attività musicale in tempo reale del tuo piano Spotify Family.
+            Visualizza e sincronizza la musica in tempo reale tra i membri del tuo piano Spotify Family.
           </p>
         </div>
 
         {/* CONTROLLI: FILTRO E MODIFICA BRANO */}
         <div className="flex items-center gap-3 flex-wrap shrink-0">
+          {/* Live Connect Button if not authorized */}
+          {!isLiveSpotifyConnected && (
+            <button
+              onClick={handleConnectSpotifyLive}
+              className="inline-flex items-center gap-1.5 bg-[#1DB954]/15 hover:bg-[#1DB954]/25 text-[#1DB954] border border-[#1DB954]/40 text-xs font-black px-3.5 py-2 rounded-2xl transition-all active:scale-95 shadow-sm"
+              title="Connetti il tuo account Spotify reale per rilevare automaticamente cosa stai ascoltando"
+            >
+              <span>🔗</span>
+              <span>Connetti Spotify Live</span>
+            </button>
+          )}
+
           {/* Filter Tabs */}
           <div className="flex items-center bg-black/50 p-1 rounded-2xl border border-white/10 text-xs">
             <button
@@ -842,12 +1069,13 @@ export default function NowListeningSection({
 
                   {/* COLONNA 5: AZIONI RAPIDE */}
                   <div className="lg:col-span-2 flex items-center justify-end gap-2 flex-wrap">
-                    {/* Sync / Ascolta Insieme */}
-                    {!act.isSelf && act.isPlaying && (
+                    {/* Sync / Ascolta Insieme (Sends real command to user's Spotify device!) */}
+                    {!act.isSelf && (
                       <button
                         onClick={() => handleSyncWithMember(act)}
-                        className="inline-flex items-center gap-1 bg-[#1DB954]/15 hover:bg-[#1DB954] text-[#1DB954] hover:text-black border border-[#1DB954]/30 font-extrabold text-xs px-2.5 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm"
-                        title={`Sincronizza il tuo ascolto con ${act.memberName}`}
+                        disabled={isSyncingPlayer}
+                        className="inline-flex items-center gap-1 bg-[#1DB954]/15 hover:bg-[#1DB954] text-[#1DB954] hover:text-black border border-[#1DB954]/30 font-extrabold text-xs px-2.5 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm disabled:opacity-50"
+                        title={`Riproduci "${act.track.title}" direttamente sul tuo Spotify`}
                       >
                         <span>✨</span>
                         <span className="hidden xl:inline">Sincronizza</span>
@@ -946,7 +1174,7 @@ export default function NowListeningSection({
               <div className="mb-3">
                 <input
                   type="text"
-                  placeholder="Cerca per titolo o artista nel catalogo..."
+                  placeholder="Cerca per titolo o artista (es. Sfera Ebbasta, Lazza, Geolier)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-black/50 border border-white/10 rounded-2xl p-3 text-xs text-zinc-100 outline-none focus:ring-2 focus:ring-[#1DB954]/50"
@@ -1001,14 +1229,14 @@ export default function NowListeningSection({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     type="text"
-                    placeholder="Titolo esatto (es. Numb)"
+                    placeholder="Titolo esatto (es. CALCOLATRICI)"
                     value={customSongTitle}
                     onChange={(e) => setCustomSongTitle(e.target.value)}
                     className="w-full bg-white/5 border border-white/10 text-xs text-zinc-100 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-[#1DB954]/50"
                   />
                   <input
                     type="text"
-                    placeholder="Artista (es. Linkin Park)"
+                    placeholder="Artista (es. Sfera Ebbasta)"
                     value={customSongArtist}
                     onChange={(e) => setCustomSongArtist(e.target.value)}
                     className="w-full bg-white/5 border border-white/10 text-xs text-zinc-100 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-[#1DB954]/50"

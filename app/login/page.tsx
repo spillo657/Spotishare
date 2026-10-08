@@ -43,7 +43,8 @@ function LoginContent() {
             const { data, error } = await supabase.auth.signInWithOAuth({
                 provider: 'spotify',
                 options: {
-                    redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectParam)}`
+                    redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectParam)}`,
+                    scopes: 'user-read-currently-playing user-read-playback-state user-modify-playback-state user-read-recently-played user-read-email'
                 }
             });
 
