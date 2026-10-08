@@ -36,7 +36,7 @@ export default function Home() {
 
   if (checkingSession) {
     return (
-      <div className="min-h-screen bg-[#0B0B0F] flex flex-col items-center justify-center font-sans">
+      <div className="min-h-dvh bg-[#0B0B0F] flex flex-col items-center justify-center font-sans pt-safe pb-safe">
         <div className="w-12 h-12 border-4 border-[#1DB954] border-t-transparent rounded-full animate-spin mb-4"></div>
         <p className="text-zinc-400 text-xs font-semibold tracking-wider uppercase animate-pulse">
           Caricamento SpotiShare...
@@ -46,7 +46,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0B0F] text-zinc-100 font-sans selection:bg-[#1DB954] selection:text-black relative overflow-hidden">
+    <div className="min-h-dvh bg-[#0B0B0F] text-zinc-100 font-sans selection:bg-[#1DB954] selection:text-black relative overflow-hidden pt-safe pb-safe pl-safe pr-safe">
       {/* Bagliori ambientali di sfondo */}
       <div className="absolute top-[-15%] left-[-10%] w-[55%] h-[55%] bg-[#1DB954]/15 blur-[150px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-15%] right-[-10%] w-[55%] h-[55%] bg-indigo-600/10 blur-[150px] rounded-full pointer-events-none" />

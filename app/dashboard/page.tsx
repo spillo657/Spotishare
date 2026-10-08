@@ -878,7 +878,7 @@ export default function Dashboard() {
     const savingsPercent = Math.round((personalMonthlySavings / individualSpotifyPrice) * 100)
 
     return (
-        <div className="min-h-screen bg-[#0B0B0F] text-zinc-100 p-4 sm:p-8 font-sans relative overflow-hidden">
+        <div className="min-h-dvh bg-[#0B0B0F] text-zinc-100 p-4 sm:p-8 pt-safe pb-safe pl-safe pr-safe font-sans relative overflow-hidden">
             {/* Sfondi con bagliori ambientali */}
             <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] bg-green-500/10 blur-[130px] rounded-full pointer-events-none"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] bg-indigo-500/10 blur-[130px] rounded-full pointer-events-none"></div>
@@ -1719,11 +1719,11 @@ export default function Dashboard() {
 
             {/* MODALE DELLE COORDINATE CARTE & BONIFICI (REVOLUT, BUDDYBANK, POSTEPAY, BPER) */}
             {showPaymentCardsModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150 overflow-y-auto">
-                    <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl max-w-xl w-full relative overflow-hidden my-8">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+                    <div className="bg-[#121218] border border-white/15 rounded-3xl p-5 sm:p-8 shadow-2xl max-w-xl w-full max-h-[85dvh] flex flex-col relative overflow-hidden my-auto">
                         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-[#1ed760]"></div>
 
-                        <div className="flex justify-between items-start mb-6">
+                        <div className="flex justify-between items-start mb-4 sm:mb-6 shrink-0">
                             <div>
                                 <h3 className="text-xl font-extrabold text-zinc-100 flex items-center gap-2">
                                     <span>💳</span> Coordinate di Pagamento
@@ -1734,17 +1734,18 @@ export default function Dashboard() {
                             </div>
                             <button
                                 onClick={() => setShowPaymentCardsModal(false)}
-                                className="text-zinc-400 hover:text-white p-2 rounded-full hover:bg-white/10 text-sm"
+                                className="text-zinc-400 hover:text-white p-2.5 rounded-full hover:bg-white/10 text-base min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                aria-label="Chiudi modale"
                             >
                                 ✕
                             </button>
                         </div>
 
                         {userRole === 'admin' && (
-                            <div className="flex justify-end mb-4">
+                            <div className="flex justify-end mb-4 shrink-0">
                                 <button
                                     onClick={() => setIsEditingCards(!isEditingCards)}
-                                    className="text-xs text-green-400 hover:text-green-300 font-bold bg-white/5 border border-white/10 px-3 py-1.5 rounded-full"
+                                    className="text-xs text-green-400 hover:text-green-300 font-bold bg-white/5 border border-white/10 px-3.5 py-2 rounded-full min-h-[38px]"
                                 >
                                     {isEditingCards ? 'Annulla Modifica' : '⚙️ Modifica Coordinate Carte'}
                                 </button>
@@ -1752,7 +1753,7 @@ export default function Dashboard() {
                         )}
 
                         {isEditingCards && userRole === 'admin' ? (
-                            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                            <div className="space-y-4 overflow-y-auto pr-1 custom-scrollbar touch-scroll overscroll-contain flex-1">
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Intestatario</label>
                                     <input type="text" value={cardDetails.holderName} onChange={e => setCardDetails({ ...cardDetails, holderName: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
@@ -1785,12 +1786,12 @@ export default function Dashboard() {
                                     <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">BPER Banca IBAN</label>
                                     <input type="text" value={cardDetails.bperIban} onChange={e => setCardDetails({ ...cardDetails, bperIban: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
                                 </div>
-                                <button onClick={saveCardsSettings} className="w-full bg-green-500 text-black font-bold py-3 rounded-xl hover:bg-green-400 transition-all text-xs">
+                                <button onClick={saveCardsSettings} className="w-full bg-green-500 text-black font-bold py-3 rounded-xl hover:bg-green-400 transition-all text-xs min-h-[44px]">
                                     Salva Coordinate
                                 </button>
                             </div>
                         ) : (
-                            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+                            <div className="space-y-4 overflow-y-auto pr-1 custom-scrollbar touch-scroll overscroll-contain flex-1">
                                 {/* CARD 1: REVOLUT */}
                                 <div className="bg-white/5 border border-white/10 p-4 rounded-2xl hover:border-cyan-500/40 transition-all">
                                     <div className="flex justify-between items-center mb-2">
@@ -1804,11 +1805,11 @@ export default function Dashboard() {
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
                                             <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.revolutTag}</span>
-                                            <button onClick={() => copyToClipboard(cardDetails.revolutTag, 'Revtag')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia Tag</button>
+                                            <button onClick={() => copyToClipboard(cardDetails.revolutTag, 'Revtag')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia Tag</button>
                                         </div>
                                         <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
                                             <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.revolutIban}</span>
-                                            <button onClick={() => copyToClipboard(cardDetails.revolutIban, 'IBAN Revolut')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia IBAN</button>
+                                            <button onClick={() => copyToClipboard(cardDetails.revolutIban, 'IBAN Revolut')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia IBAN</button>
                                         </div>
                                     </div>
                                 </div>
@@ -1825,7 +1826,7 @@ export default function Dashboard() {
                                     <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails.holderName}</strong></p>
                                     <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
                                         <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.buddybankIban}</span>
-                                        <button onClick={() => copyToClipboard(cardDetails.buddybankIban, 'IBAN Buddybank')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia IBAN</button>
+                                        <button onClick={() => copyToClipboard(cardDetails.buddybankIban, 'IBAN Buddybank')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia IBAN</button>
                                     </div>
                                 </div>
 
@@ -1845,14 +1846,14 @@ export default function Dashboard() {
                                                 <span className="text-[9px] uppercase tracking-widest text-zinc-500 block">Numero Carta:</span>
                                                 <span className="text-xs font-mono font-bold text-zinc-100">{cardDetails.postepayCardNumber}</span>
                                             </div>
-                                            <button onClick={() => copyToClipboard(cardDetails.postepayCardNumber.replace(/\s+/g, ''), 'Numero Postepay')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia Carta</button>
+                                            <button onClick={() => copyToClipboard(cardDetails.postepayCardNumber.replace(/\s+/g, ''), 'Numero Postepay')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia Carta</button>
                                         </div>
                                         <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
                                             <div>
                                                 <span className="text-[9px] uppercase tracking-widest text-zinc-500 block">Codice Fiscale:</span>
                                                 <span className="text-xs font-mono font-bold text-zinc-100">{cardDetails.postepayFiscalCode}</span>
                                             </div>
-                                            <button onClick={() => copyToClipboard(cardDetails.postepayFiscalCode, 'Codice Fiscale')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia C.F.</button>
+                                            <button onClick={() => copyToClipboard(cardDetails.postepayFiscalCode, 'Codice Fiscale')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia C.F.</button>
                                         </div>
                                     </div>
                                 </div>
@@ -1869,7 +1870,7 @@ export default function Dashboard() {
                                     <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails.holderName}</strong></p>
                                     <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
                                         <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.bperIban}</span>
-                                        <button onClick={() => copyToClipboard(cardDetails.bperIban, 'IBAN BPER')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia IBAN</button>
+                                        <button onClick={() => copyToClipboard(cardDetails.bperIban, 'IBAN BPER')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia IBAN</button>
                                     </div>
                                 </div>
 
@@ -1886,14 +1887,14 @@ export default function Dashboard() {
                                             <button
                                                 type="button"
                                                 onClick={() => sendPaymentMessageToAdmin('paid')}
-                                                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 bg-[#25D366] text-black hover:bg-[#1ebd59] font-black text-xs px-3.5 py-2 rounded-xl transition-all shadow-md active:scale-95"
+                                                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 bg-[#25D366] text-black hover:bg-[#1ebd59] font-black text-xs px-3.5 py-2.5 rounded-xl transition-all shadow-md active:scale-95 min-h-[40px]"
                                             >
                                                 <span>💸</span> Notifica Saldo
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => sendPaymentMessageToAdmin('request_coordinates')}
-                                                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/20 text-zinc-100 font-bold text-xs px-3.5 py-2 rounded-xl transition-all active:scale-95"
+                                                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/20 text-zinc-100 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all active:scale-95 min-h-[40px]"
                                             >
                                                 <span>❓</span> Chiedi Info
                                             </button>
@@ -1903,10 +1904,10 @@ export default function Dashboard() {
                             </div>
                         )}
 
-                        <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
+                        <div className="mt-4 pt-4 border-t border-white/10 flex justify-end shrink-0">
                             <button
                                 onClick={() => setShowPaymentCardsModal(false)}
-                                className="w-full sm:w-auto px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all"
+                                className="w-full sm:w-auto px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all min-h-[44px]"
                             >
                                 Chiudi
                             </button>
@@ -1918,7 +1919,7 @@ export default function Dashboard() {
             {/* MODALE DI CONFERMA UNIVERSALE */}
             {confirmModal && confirmModal.isOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150">
-                    <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 shadow-2xl max-w-md w-full ring-1 ring-white/10 relative overflow-hidden animate-in zoom-in-95 duration-150">
+                    <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 shadow-2xl max-w-md w-full max-h-[90dvh] flex flex-col ring-1 ring-white/10 relative overflow-hidden animate-in zoom-in-95 duration-150 my-auto">
                         <div className={`absolute top-0 left-0 right-0 h-1.5 ${
                             confirmModal.title.toLowerCase().includes('rimuovi') ||
                             confirmModal.title.toLowerCase().includes('annulla') ||
@@ -1934,18 +1935,18 @@ export default function Dashboard() {
                         <p className="text-sm text-zinc-400 leading-relaxed mb-6">
                             {confirmModal.message}
                         </p>
-                        <div className="flex justify-end gap-3">
+                        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 w-full">
                             <button
                                 onClick={() => setConfirmModal(null)}
-                                className="px-5 py-2.5 rounded-xl border border-white/10 text-zinc-300 hover:text-white hover:bg-white/5 font-semibold text-sm transition-all active:scale-95"
+                                className="w-full sm:w-auto px-5 py-3 rounded-xl border border-white/10 text-zinc-300 hover:text-white hover:bg-white/5 font-semibold text-sm transition-all active:scale-95 min-h-[44px]"
                             >
-                                Annulla
+                                {confirmModal.cancelText || 'Annulla'}
                             </button>
                             <button
                                 onClick={() => {
                                     confirmModal.action()
                                 }}
-                                className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 ${
+                                className={`w-full sm:w-auto px-5 py-3 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 min-h-[44px] ${
                                     confirmModal.title.toLowerCase().includes('rimuovi') ||
                                     confirmModal.title.toLowerCase().includes('annulla') ||
                                     confirmModal.title.toLowerCase().includes('elimina') ||
@@ -1955,7 +1956,7 @@ export default function Dashboard() {
                                         : 'bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black shadow-green-500/20 hover:scale-[1.02]'
                                 }`}
                             >
-                                Conferma
+                                {confirmModal.confirmText || 'Conferma'}
                             </button>
                         </div>
                     </div>
@@ -1965,20 +1966,22 @@ export default function Dashboard() {
             {/* MODALE ISTRUZIONI INSTALLAZIONE IOS PWA */}
             {showIOSInstallModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150">
-                    <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 shadow-2xl max-w-sm w-full relative overflow-hidden">
+                    <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 shadow-2xl max-w-sm w-full max-h-[90dvh] flex flex-col relative overflow-hidden my-auto">
                         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-[#1ed760]"></div>
-                        <div className="text-center mb-4">
+                        <div className="text-center mb-4 shrink-0">
                             <span className="text-4xl mb-2 inline-block">📲</span>
                             <h3 className="text-xl font-black text-zinc-100">Installa su iPhone / iPad</h3>
                         </div>
-                        <ol className="text-xs text-zinc-300 space-y-3 mb-6 list-decimal list-inside bg-white/5 p-4 rounded-2xl border border-white/5 leading-relaxed">
-                            <li>Tocca il pulsante <strong>Condividi</strong> (icona del quadrato con la freccia verso l&apos;alto ⎋) in fondo a Safari.</li>
-                            <li>Scorri verso il basso e tocca <strong>&quot;Aggiungi alla schermata Home&quot;</strong>.</li>
-                            <li>Tocca <strong>Aggiungi</strong> in alto a destra. Fatto! 🚀</li>
-                        </ol>
+                        <div className="overflow-y-auto pr-1 touch-scroll overscroll-contain flex-1">
+                            <ol className="text-xs text-zinc-300 space-y-3 mb-6 list-decimal list-inside bg-white/5 p-4 rounded-2xl border border-white/5 leading-relaxed">
+                                <li>Tocca il pulsante <strong>Condividi</strong> (icona del quadrato con la freccia verso l&apos;alto ⎋) in fondo a Safari.</li>
+                                <li>Scorri verso il basso e tocca <strong>&quot;Aggiungi alla schermata Home&quot;</strong>.</li>
+                                <li>Tocca <strong>Aggiungi</strong> in alto a destra. Fatto! 🚀</li>
+                            </ol>
+                        </div>
                         <button
                             onClick={() => setShowIOSInstallModal(false)}
-                            className="w-full bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black font-bold py-3 rounded-xl hover:scale-[1.02] transition-all text-sm"
+                            className="w-full bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black font-bold py-3.5 rounded-xl hover:scale-[1.02] transition-all text-sm min-h-[44px] shrink-0"
                         >
                             Ho capito
                         </button>

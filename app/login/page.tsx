@@ -67,7 +67,7 @@ function LoginContent() {
     };
 
     return (
-        <div className="relative flex min-h-screen items-center justify-center bg-[#0B0B0F] p-4 text-zinc-100 overflow-hidden font-sans">
+        <div className="relative flex min-h-dvh items-center justify-center bg-[#0B0B0F] p-4 pt-safe pb-safe pl-safe pr-safe text-zinc-100 overflow-hidden font-sans">
             {/* Bagliori ambientali */}
             <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] rounded-full bg-green-500/10 blur-[130px] pointer-events-none" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] rounded-full bg-indigo-500/10 blur-[130px] pointer-events-none" />
@@ -140,7 +140,7 @@ function LoginContent() {
 export default function Login() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-[#0B0B0F] flex items-center justify-center">
+            <div className="min-h-dvh bg-[#0B0B0F] flex items-center justify-center pt-safe pb-safe">
                 <div className="w-10 h-10 border-4 border-[#1DB954] border-t-transparent rounded-full animate-spin"></div>
             </div>
         }>

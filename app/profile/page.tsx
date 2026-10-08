@@ -170,7 +170,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0B0B0F] text-zinc-100 flex items-center justify-center font-sans">
+      <div className="min-h-dvh bg-[#0B0B0F] text-zinc-100 flex items-center justify-center font-sans pt-safe pb-safe">
         <div className="text-center">
           <div className="w-10 h-10 border-3 border-[#1DB954] border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
           <p className="text-zinc-400 text-xs">Caricamento impostazioni profilo...</p>
@@ -180,7 +180,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0B0F] text-zinc-100 p-4 sm:p-8 font-sans relative overflow-hidden">
+    <div className="min-h-dvh bg-[#0B0B0F] text-zinc-100 p-4 sm:p-8 pt-safe pb-safe pl-safe pr-safe font-sans relative overflow-hidden">
       {/* Bagliori ambientali */}
       <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] bg-green-500/10 blur-[130px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] bg-indigo-500/10 blur-[130px] rounded-full pointer-events-none" />
@@ -349,16 +349,16 @@ export default function ProfilePage() {
             <p className="text-sm text-zinc-400 leading-relaxed mb-6">
               {confirmModal.message}
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 w-full">
               <button
                 onClick={() => setConfirmModal(null)}
-                className="px-5 py-2.5 rounded-xl border border-white/10 text-zinc-300 hover:text-white hover:bg-white/5 font-semibold text-sm transition-all active:scale-95"
+                className="w-full sm:w-auto px-5 py-3 rounded-xl border border-white/10 text-zinc-300 hover:text-white hover:bg-white/5 font-semibold text-sm transition-all active:scale-95 min-h-[44px]"
               >
                 Annulla
               </button>
               <button
                 onClick={() => confirmModal.action()}
-                className="px-5 py-2.5 rounded-xl bg-red-500 hover:bg-red-400 text-white font-bold text-sm transition-all shadow-lg active:scale-95 shadow-red-500/20"
+                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-red-500 hover:bg-red-400 text-white font-bold text-sm transition-all shadow-lg active:scale-95 shadow-red-500/20 min-h-[44px]"
               >
                 Conferma
               </button>

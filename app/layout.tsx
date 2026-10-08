@@ -8,14 +8,18 @@ export const viewport: Viewport = {
   themeColor: '#0B0B0F',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  viewportFit: 'cover',
 }
 
 export const metadata: Metadata = {
   title: 'SpotiShare • Spotify Family Management',
   description: 'Gestisci e condividi il tuo abbonamento Spotify Family con il tuo gruppo in totale semplicità',
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'SpotiShare',
+  },
   icons: {
     icon: [
       { url: '/favicon.ico?v=3', sizes: 'any' },
@@ -35,13 +39,11 @@ export default function RootLayout({
   return (
     <html lang="it">
       <head>
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <link rel="alternate icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
-      <body className="bg-[#0B0B0F] text-zinc-100 antialiased min-h-screen selection:bg-[#1DB954] selection:text-black">
+      <body className="bg-[#0B0B0F] text-zinc-100 antialiased min-h-dvh selection:bg-[#1DB954] selection:text-black">
         <ToastProvider>
           <ServiceWorkerRegister />
           <OneSignalInitializer />

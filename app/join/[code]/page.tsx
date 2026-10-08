@@ -105,7 +105,7 @@ export default function JoinPlanPage() {
   }, [params.code, router, showToast]);
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-[#0B0B0F] p-4 text-zinc-100 overflow-hidden font-sans">
+    <div className="relative flex min-h-dvh items-center justify-center bg-[#0B0B0F] p-4 pt-safe pb-safe pl-safe pr-safe text-zinc-100 overflow-hidden font-sans">
       {/* Sfondi con bagliori ambientali */}
       <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] bg-green-500/10 blur-[130px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] bg-indigo-500/10 blur-[130px] rounded-full pointer-events-none" />
