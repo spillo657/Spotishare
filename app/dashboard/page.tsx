@@ -1042,14 +1042,6 @@ export default function Dashboard() {
                                         )}
                                     </div>
 
-                                    {/* SEZIONE SPOTIFY LIVE LISTENING ACTIVITY */}
-                                    <NowListeningSection
-                                        members={members}
-                                        currentUser={user}
-                                        planId={userPlanId}
-                                        onTriggerConfetti={triggerConfetti}
-                                    />
-
                                     {/* INVITO NUOVI MEMBRI */}
                                     <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-xl ring-1 ring-white/5">
                                         <h3 className="font-extrabold text-sm mb-1 text-zinc-100 flex items-center gap-2">
@@ -1083,6 +1075,16 @@ export default function Dashboard() {
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* SEZIONE SPOTIFY LIVE LISTENING ACTIVITY (AMPIA A SCHERMO INTERO) */}
+                            <div className="mb-12">
+                                <NowListeningSection
+                                    members={members}
+                                    currentUser={user}
+                                    planId={userPlanId}
+                                    onTriggerConfetti={triggerConfetti}
+                                />
                             </div>
 
                             {/* SEZIONE 2: WIDGET RISPARMIO + PLAYLIST HUB + INDIRIZZO CONDIVISO */}

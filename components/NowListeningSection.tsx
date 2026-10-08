@@ -66,10 +66,21 @@ const DEFAULT_TRACK_CATALOG: TrackData[] = [
     artist: 'The Weeknd',
     album: 'After Hours',
     durationSec: 200,
-    coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/600x600bb.jpg',
+    coverUrl: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2738863bc11d2aa12b54f5aeb36',
     spotifyUrl: 'https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b',
     genre: 'Synthwave',
     audioTheme: 'electronic'
+  },
+  {
+    id: '100-messaggi',
+    title: '100 MESSAGGI',
+    artist: 'Lazza',
+    album: 'LOCURA',
+    durationSec: 245,
+    coverUrl: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273baf89eb11ec7c657805d2da0',
+    spotifyUrl: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
+    genre: 'Rap Italiano',
+    audioTheme: 'energetic'
   },
   {
     id: 'die-with-a-smile',
@@ -163,14 +174,19 @@ export default function NowListeningSection({
   const audioContextRef = useRef<AudioContext | null>(null);
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Storage key with versioning to clear any legacy unsplash URLs
+  const storageKey = `spotishare_listening_v5_${planId || 'default'}`;
+
   // Initialize and persist member listening states
   useEffect(() => {
     if (!members || members.length === 0) return;
 
-    const storageKey = `spotishare_now_playing_${planId || 'default'}`;
     let savedState: Record<string, any> = {};
     if (typeof window !== 'undefined') {
       try {
+        // Clear legacy unsplash cache if present
+        localStorage.removeItem(`spotishare_now_playing_${planId || 'default'}`);
+        localStorage.removeItem(`spotishare_now_playing_v2_${planId || 'default'}`);
         const raw = localStorage.getItem(storageKey);
         if (raw) savedState = JSON.parse(raw);
       } catch (e) {
@@ -182,7 +198,13 @@ export default function NowListeningSection({
       const isSelf = member.id === currentUser?.id;
       const cached = savedState[member.id];
 
-      if (cached && cached.track) {
+      // Validate cache: ensure no legacy unsplash URL
+      if (
+        cached &&
+        cached.track &&
+        cached.track.coverUrl &&
+        !cached.track.coverUrl.includes('unsplash')
+      ) {
         return {
           memberId: member.id,
           memberName: member.name || (isSelf ? 'Tu' : `Membro #${index + 1}`),
@@ -196,7 +218,7 @@ export default function NowListeningSection({
         };
       }
 
-      // Deterministic initial assignment with real songs
+      // Default deterministic assignment with authentic Spotify artwork
       const track = DEFAULT_TRACK_CATALOG[index % DEFAULT_TRACK_CATALOG.length];
       const isPlaying = index % 3 !== 2;
       const initialProgress = Math.floor(Math.random() * (track.durationSec - 40)) + 20;
@@ -215,7 +237,7 @@ export default function NowListeningSection({
     });
 
     setActivities(newActivities);
-  }, [members, currentUser, planId]);
+  }, [members, currentUser, planId, storageKey]);
 
   // Timer to advance progress bars smoothly
   useEffect(() => {
@@ -243,7 +265,6 @@ export default function NowListeningSection({
 
   const persistActivities = (updatedList: MemberActivity[]) => {
     if (typeof window === 'undefined') return;
-    const storageKey = `spotishare_now_playing_${planId || 'default'}`;
     const mapToSave: Record<string, any> = {};
     updatedList.forEach((a) => {
       mapToSave[a.memberId] = {
@@ -432,37 +453,37 @@ export default function NowListeningSection({
   const currentlyPlayingCount = activities.filter((a) => a.isPlaying).length;
 
   return (
-    <div className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl ring-1 ring-white/5 relative overflow-hidden transition-all">
-      {/* Subtle Ambient Glow */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-[#1DB954]/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 sm:p-7 shadow-2xl ring-1 ring-white/5 relative overflow-hidden transition-all">
+      {/* Subtle Ambient Emerald Glow */}
+      <div className="absolute top-0 right-0 w-80 h-80 bg-[#1DB954]/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* HEADER DELLA TABELLA MUSICA SPOTIFY */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-white/10">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-white/10">
         <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="relative flex h-3 w-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="relative flex h-3.5 w-3.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-[#1DB954]" />
+              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#1DB954]" />
             </span>
-            <h3 className="text-lg font-black text-zinc-100 flex items-center gap-2 tracking-tight">
+            <h3 className="text-xl sm:text-2xl font-black text-zinc-100 flex items-center gap-2.5 tracking-tight">
               <span>🎧</span> In Ascolto Ora su Spotify
             </h3>
-            <span className="text-[10px] uppercase font-black tracking-wider bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 px-2.5 py-0.5 rounded-full shadow-[0_0_8px_rgba(29,185,84,0.2)]">
+            <span className="text-[10px] uppercase font-black tracking-wider bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30 px-3 py-1 rounded-full shadow-[0_0_10px_rgba(29,185,84,0.25)]">
               Live Group Activity
             </span>
           </div>
           <p className="text-xs text-zinc-400 mt-1">
-            Visualizza le tracce trasmesse in tempo reale dai membri della famiglia Spotify.
+            Visualizza cosa stanno ascoltando in tempo reale i membri del tuo piano Spotify Family.
           </p>
         </div>
 
         {/* CONTROLLI: FILTRO E MODIFICA BRANO */}
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
+        <div className="flex items-center gap-3 flex-wrap shrink-0">
           {/* Filter Tabs */}
-          <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 text-xs">
+          <div className="flex items-center bg-black/50 p-1 rounded-2xl border border-white/10 text-xs">
             <button
               onClick={() => setFilterMode('all')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
                 filterMode === 'all'
                   ? 'bg-white/15 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
@@ -472,9 +493,9 @@ export default function NowListeningSection({
             </button>
             <button
               onClick={() => setFilterMode('playing')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1 ${
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
                 filterMode === 'playing'
-                  ? 'bg-[#1DB954] text-black font-extrabold shadow-sm'
+                  ? 'bg-[#1DB954] text-black font-black shadow-sm shadow-[#1DB954]/20'
                   : 'text-zinc-400 hover:text-[#1DB954]'
               }`}
             >
@@ -483,7 +504,7 @@ export default function NowListeningSection({
             </button>
             <button
               onClick={() => setFilterMode('paused')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
                 filterMode === 'paused'
                   ? 'bg-white/15 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
@@ -496,7 +517,7 @@ export default function NowListeningSection({
           {/* Button: Change your song */}
           <button
             onClick={() => setShowSongPickerModal(true)}
-            className="inline-flex items-center gap-1.5 bg-[#1DB954]/15 hover:bg-[#1DB954] text-[#1DB954] hover:text-black border border-[#1DB954]/30 hover:border-transparent text-xs font-extrabold px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm"
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-[#1DB954] to-[#1ed760] hover:scale-105 text-black font-extrabold text-xs px-4 py-2 rounded-2xl transition-all active:scale-95 shadow-lg shadow-[#1DB954]/25"
           >
             <span>🎵</span>
             <span>Il tuo brano</span>
@@ -504,20 +525,30 @@ export default function NowListeningSection({
         </div>
       </div>
 
-      {/* TABELLA BRANI IN ASCOLTO (CLEAN SPOTIFY STYLE) */}
-      <div className="mt-4">
+      {/* TABELLA TRACKLIST SPOTTIFY CON COPERTINE UFFICIALI E LAYOUT AMPIO */}
+      <div className="mt-6">
         {filteredActivities.length === 0 ? (
-          <div className="py-10 text-center bg-black/20 border border-white/5 rounded-2xl">
-            <p className="text-zinc-400 text-xs">Nessun membro corrisponde al filtro selezionato.</p>
+          <div className="py-12 text-center bg-black/20 border border-white/5 rounded-3xl">
+            <p className="text-zinc-400 text-sm">Nessun membro corrisponde al filtro selezionato.</p>
             <button
               onClick={() => setFilterMode('all')}
-              className="mt-2 text-xs text-[#1DB954] font-bold hover:underline"
+              className="mt-3 text-xs text-[#1DB954] font-bold hover:underline"
             >
               Mostra tutti i partecipanti
             </button>
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-3">
+            {/* INTESTAZIONE TABELLA DESKTOP */}
+            <div className="hidden lg:grid grid-cols-12 gap-4 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 border-b border-white/5">
+              <div className="col-span-1 text-center">#</div>
+              <div className="col-span-4">Brano & Artista</div>
+              <div className="col-span-3">Membro / Dispositivo</div>
+              <div className="col-span-2">Avanzamento</div>
+              <div className="col-span-2 text-right">Azioni</div>
+            </div>
+
+            {/* RIGHE BRANI ASCOLTATI */}
             {filteredActivities.map((act, index) => {
               const progressPercent = Math.min(
                 100,
@@ -528,34 +559,34 @@ export default function NowListeningSection({
               return (
                 <div
                   key={act.memberId}
-                  className={`p-3.5 bg-black/40 hover:bg-black/60 border ${
+                  className={`p-4 bg-black/40 hover:bg-black/60 border ${
                     act.isPlaying
-                      ? 'border-[#1DB954]/30 hover:border-[#1DB954]/60'
+                      ? 'border-[#1DB954]/30 hover:border-[#1DB954]/60 shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
                       : 'border-white/5 hover:border-white/15'
-                  } rounded-2xl transition-all group flex flex-col md:flex-row md:items-center justify-between gap-3.5`}
+                  } rounded-2xl sm:rounded-3xl transition-all duration-200 flex flex-col lg:grid lg:grid-cols-12 gap-4 lg:items-center`}
                 >
-                  {/* LATO SINISTRO: COPERTINA REALE + TITOLO/ARTISTA + EQUALIZZATORE */}
-                  <div className="flex items-center gap-3.5 min-w-0 flex-grow">
-                    {/* INDICE / MINI EQUALIZZATORE */}
-                    <div className="w-6 shrink-0 flex items-center justify-center text-zinc-500 text-xs font-mono font-bold">
-                      {act.isPlaying ? (
-                        <div className="flex items-end gap-[2px] h-4 w-4" title="In riproduzione">
-                          <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-1" />
-                          <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-2" />
-                          <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-3" />
-                          <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-4" />
-                        </div>
-                      ) : (
-                        <span>{index + 1}</span>
-                      )}
-                    </div>
+                  {/* COLONNA 1: NUMERO / EQUALIZZATORE ANIMATO */}
+                  <div className="hidden lg:flex lg:col-span-1 items-center justify-center text-zinc-400 text-xs font-mono font-bold">
+                    {act.isPlaying ? (
+                      <div className="flex items-end gap-[2px] h-4 w-4" title="In riproduzione">
+                        <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-1" />
+                        <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-2" />
+                        <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-3" />
+                        <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-4" />
+                      </div>
+                    ) : (
+                      <span className="text-zinc-600">{index + 1}</span>
+                    )}
+                  </div>
 
-                    {/* COPERTINA REALE SPOTIFY (SQUARE ARTWORK, NO DISK GRAPHIC) */}
-                    <div className="relative w-12 h-12 sm:w-13 sm:h-13 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 group-hover:scale-105 transition-transform">
+                  {/* COLONNA 2: COPERTINA REALE + TITOLO/ARTISTA/ALBUM */}
+                  <div className="lg:col-span-4 flex items-center gap-3.5 min-w-0">
+                    {/* Square Official Album Cover */}
+                    <div className="relative w-14 h-14 shrink-0 rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 group-hover:scale-105 transition-transform">
                       <img
                         src={act.track.coverUrl}
-                        alt={`${act.track.title} cover`}
-                        className={`w-full h-full object-cover transition-opacity ${
+                        alt={`${act.track.title} album cover`}
+                        className={`w-full h-full object-cover ${
                           act.isPlaying ? 'opacity-100' : 'opacity-70 grayscale-[20%]'
                         }`}
                         onError={(e) => {
@@ -564,78 +595,88 @@ export default function NowListeningSection({
                       />
                     </div>
 
-                    {/* DETTAGLI TRACCIA */}
                     <div className="min-w-0 flex-grow">
                       <div className="flex items-center gap-2">
                         <a
                           href={act.track.spotifyUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-extrabold text-sm text-zinc-100 hover:text-[#1DB954] truncate transition-colors"
+                          className="font-black text-sm text-zinc-100 hover:text-[#1DB954] truncate transition-colors"
                           title={`Apri "${act.track.title}" su Spotify`}
                         >
                           {act.track.title}
                         </a>
                       </div>
-                      <p className="text-xs text-zinc-300 font-medium truncate mt-0.5">
+                      <p className="text-xs text-zinc-300 font-bold truncate mt-0.5">
                         {act.track.artist}
-                        {act.track.album && (
-                          <span className="text-zinc-500 font-normal"> • {act.track.album}</span>
-                        )}
                       </p>
-
-                      {/* LIVE PROGRESS BAR & TIME */}
-                      {act.isPlaying && (
-                        <div className="flex items-center gap-2 mt-1.5 max-w-xs">
-                          <div className="flex-grow bg-white/10 h-1 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-[#1DB954] to-emerald-300 rounded-full transition-all duration-1000 ease-linear shadow-[0_0_6px_rgba(29,185,84,0.6)]"
-                              style={{ width: `${progressPercent}%` }}
-                            />
-                          </div>
-                          <span className="text-[9px] font-mono text-zinc-400 shrink-0 font-semibold">
-                            {formatTime(act.progressSec)} / {formatTime(act.track.durationSec)}
-                          </span>
-                        </div>
-                      )}
+                      <p className="text-[10px] text-zinc-500 truncate mt-0.5 flex items-center gap-1.5">
+                        <span>{act.track.album}</span>
+                        <span>•</span>
+                        <span className="text-[#1DB954] font-medium">{act.track.genre}</span>
+                      </p>
                     </div>
                   </div>
 
-                  {/* CENTRO-DESTRA: INFO MEMBRO ASCOLTATORE */}
-                  <div className="flex items-center gap-2 shrink-0 px-2 py-1 bg-white/[0.02] border border-white/5 rounded-xl">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-white/15 to-white/5 border border-white/10 flex items-center justify-center text-[10px] font-black text-white shrink-0">
+                  {/* COLONNA 3: MEMBRO CHE ASCOLTA & DISPOSITIVO */}
+                  <div className="lg:col-span-3 flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/15 to-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-white shrink-0 shadow-inner">
                       {act.memberName.charAt(0).toUpperCase()}
                     </div>
-                    <div className="min-w-0 text-left">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-zinc-200 truncate max-w-[110px]">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-extrabold text-zinc-200 truncate">
                           {act.memberName}
-                        </span>
+                        </p>
                         {act.isSelf && (
-                          <span className="text-[8px] font-black uppercase bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/30 px-1 py-0.2 rounded">
+                          <span className="text-[9px] font-black uppercase tracking-wider bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/30 px-1.5 py-0.2 rounded-md">
                             Tu
                           </span>
                         )}
                       </div>
-                      <p className="text-[9px] text-zinc-500 truncate">{act.device}</p>
+                      <p className="text-[10px] text-zinc-400 truncate mt-0.5">{act.device}</p>
                     </div>
                   </div>
 
-                  {/* LATO DESTRO: AZIONI (SINCRONIZZA, ANTEPRIMA, APRI SPOTIFY) */}
-                  <div className="flex items-center gap-1.5 shrink-0 self-end md:self-center">
-                    {/* Sync / Ascolta Insieme Button */}
+                  {/* COLONNA 4: BARRA DI AVANZAMENTO & STATO */}
+                  <div className="lg:col-span-2 min-w-0">
+                    {act.isPlaying ? (
+                      <div className="space-y-1.5">
+                        <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-[#1DB954] to-emerald-300 rounded-full transition-all duration-1000 ease-linear shadow-[0_0_8px_rgba(29,185,84,0.6)]"
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] font-mono font-bold text-zinc-400">
+                          <span>{formatTime(act.progressSec)}</span>
+                          <span className="text-zinc-600">/</span>
+                          <span>{formatTime(act.track.durationSec)}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 bg-white/5 px-2.5 py-1 rounded-xl w-fit">
+                        <span>⏸️</span>
+                        <span>{act.lastPlayedText}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* COLONNA 5: AZIONI RAPIDE */}
+                  <div className="lg:col-span-2 flex items-center justify-end gap-2 flex-wrap">
+                    {/* Sync / Ascolta Insieme */}
                     {!act.isSelf && act.isPlaying && (
                       <button
                         onClick={() => handleSyncWithMember(act)}
-                        className="inline-flex items-center gap-1 bg-[#1DB954]/15 hover:bg-[#1DB954] text-[#1DB954] hover:text-black border border-[#1DB954]/30 font-bold text-xs px-2.5 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm"
+                        className="inline-flex items-center gap-1 bg-[#1DB954]/15 hover:bg-[#1DB954] text-[#1DB954] hover:text-black border border-[#1DB954]/30 font-extrabold text-xs px-2.5 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm"
                         title={`Sincronizza il tuo ascolto con ${act.memberName}`}
                       >
                         <span>✨</span>
-                        <span className="hidden sm:inline">Ascolta Insieme</span>
+                        <span className="hidden xl:inline">Sincronizza</span>
                       </button>
                     )}
 
-                    {/* Audio Preview synthesizer */}
+                    {/* Audio Preview Synth */}
                     <button
                       onClick={() => handlePlaySoundPreview(act)}
                       className={`p-1.5 sm:px-2.5 sm:py-1.5 border text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center gap-1 ${
@@ -643,13 +684,12 @@ export default function NowListeningSection({
                           ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse'
                           : 'bg-white/5 border-white/10 text-zinc-300 hover:text-white hover:bg-white/10'
                       }`}
-                      title="Anteprima sonora sintetica"
+                      title="Anteprima accordi musicali"
                     >
                       <span>{isPreviewing ? '🔊' : '🎵'}</span>
-                      <span className="hidden sm:inline">{isPreviewing ? 'Stop' : 'Anteprima'}</span>
                     </button>
 
-                    {/* Play/Pause simulation toggle */}
+                    {/* Simulation toggle */}
                     <button
                       onClick={() => handleTogglePlay(act.memberId)}
                       className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white rounded-xl transition-all text-xs"
@@ -658,18 +698,18 @@ export default function NowListeningSection({
                       {act.isPlaying ? '⏸' : '▶️'}
                     </button>
 
-                    {/* Official Spotify Link Button */}
+                    {/* Official Spotify button */}
                     <a
                       href={act.track.spotifyUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm shadow-[#1DB954]/20"
-                      title="Apri brano ufficiale su Spotify"
+                      className="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm shadow-[#1DB954]/25 shrink-0"
+                      title="Apri traccia su Spotify"
                     >
                       <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
                         <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.516 17.305c-.216.355-.678.47-1.033.254-2.827-1.727-6.386-2.118-10.578-1.16-.407.094-.813-.162-.907-.568-.094-.407.162-.813.568-.907 4.588-1.049 8.528-.607 11.696 1.348.355.216.47.678.254 1.033zm1.472-3.275c-.272.443-.853.585-1.296.313-3.237-1.99-8.172-2.565-12.001-1.402-.497.151-1.026-.134-1.177-.631-.151-.497.134-1.026.631-1.177 4.382-1.33 9.824-.693 13.53 1.587.443.272.585.853.313 1.296zm.127-3.41c-3.882-2.305-10.288-2.518-13.998-1.391-.597.181-1.233-.16-1.414-.757-.181-.597.16-1.233.757-1.414 4.268-1.296 11.341-1.047 15.807 1.604.538.319.715 1.018.396 1.556-.319.538-1.018.715-1.556.396z" />
                       </svg>
-                      <span className="hidden sm:inline">Spotify</span>
+                      <span>Spotify</span>
                     </a>
                   </div>
                 </div>
@@ -682,7 +722,7 @@ export default function NowListeningSection({
       {/* MODALE DI SELEZIONE BRANO CON RICERCA E COPERTINE REALI */}
       {showSongPickerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-7 shadow-2xl max-w-lg w-full relative overflow-hidden ring-1 ring-white/10 max-h-[90vh] flex flex-col justify-between">
+          <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl max-w-lg w-full relative overflow-hidden ring-1 ring-white/10 max-h-[90vh] flex flex-col justify-between">
             {/* Emerald Header Accent */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-emerald-400" />
 
@@ -693,7 +733,7 @@ export default function NowListeningSection({
                     <span>🎧</span> Il tuo brano su SpotiShare
                   </h3>
                   <p className="text-xs text-zinc-400 mt-1">
-                    Scegli una traccia dal catalogo o inserisci un brano personalizzato.
+                    Scegli una traccia dal catalogo o inserisci un brano personalizzato da mostrare al gruppo.
                   </p>
                 </div>
                 <button
