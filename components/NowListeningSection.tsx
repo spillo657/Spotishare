@@ -409,15 +409,29 @@ export default function NowListeningSection({
     };
   }, [planId, currentUser]);
 
-  // Extract client Spotify token from Supabase session if present
+  // Extract client Spotify token from Supabase session, cookies, or localStorage
   useEffect(() => {
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.provider_token) {
-          setClientSpotifyToken(session.provider_token);
+        let token = session?.provider_token || null;
+
+        if (!token && typeof document !== 'undefined') {
+          const match = document.cookie.match(/(^| )spotify_provider_token=([^;]+)/);
+          if (match) token = match[2];
+        }
+
+        if (!token && typeof window !== 'undefined') {
+          token = localStorage.getItem('spotify_provider_token');
+        }
+
+        if (token) {
+          setClientSpotifyToken(token);
           if (typeof document !== 'undefined') {
-            document.cookie = `spotify_provider_token=${session.provider_token}; path=/; max-age=3600; SameSite=Lax`;
+            document.cookie = `spotify_provider_token=${token}; path=/; max-age=3600; SameSite=Lax`;
+          }
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('spotify_provider_token', token);
           }
         }
       } catch (e) {
@@ -434,6 +448,9 @@ export default function NowListeningSection({
         if (typeof document !== 'undefined') {
           document.cookie = `spotify_provider_token=${session.provider_token}; path=/; max-age=3600; SameSite=Lax`;
         }
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('spotify_provider_token', session.provider_token);
+        }
       }
     });
 
@@ -447,8 +464,18 @@ export default function NowListeningSection({
     if (isManual) setIsRefreshing(true);
     try {
       const headers: Record<string, string> = {};
-      if (clientSpotifyToken) {
-        headers['Authorization'] = `Bearer ${clientSpotifyToken}`;
+      let activeToken = clientSpotifyToken;
+
+      if (!activeToken && typeof window !== 'undefined') {
+        activeToken = localStorage.getItem('spotify_provider_token');
+      }
+      if (!activeToken && typeof document !== 'undefined') {
+        const match = document.cookie.match(/(^| )spotify_provider_token=([^;]+)/);
+        if (match) activeToken = match[2];
+      }
+
+      if (activeToken) {
+        headers['Authorization'] = `Bearer ${activeToken}`;
       }
 
       const res = await fetch('/api/spotify/current', {
@@ -573,8 +600,16 @@ export default function NowListeningSection({
     setIsLoadingRecent(true);
     try {
       const headers: Record<string, string> = {};
-      if (clientSpotifyToken) {
-        headers['Authorization'] = `Bearer ${clientSpotifyToken}`;
+      let activeToken = clientSpotifyToken;
+      if (!activeToken && typeof window !== 'undefined') {
+        activeToken = localStorage.getItem('spotify_provider_token');
+      }
+      if (!activeToken && typeof document !== 'undefined') {
+        const match = document.cookie.match(/(^| )spotify_provider_token=([^;]+)/);
+        if (match) activeToken = match[2];
+      }
+      if (activeToken) {
+        headers['Authorization'] = `Bearer ${activeToken}`;
       }
       const res = await fetch('/api/spotify/recent', {
         headers,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import confetti from 'canvas-confetti'
 import { supabase } from '../../utils/supabase'
@@ -67,6 +67,7 @@ export default function Dashboard() {
     // 4. Modal Coordinate Carte & Pagamenti (Revolut, Buddybank, Postepay, BPER)
     const [showPaymentCardsModal, setShowPaymentCardsModal] = useState(false)
     const [isEditingCards, setIsEditingCards] = useState(false)
+    const settingsChannelRef = useRef<any>(null)
     const [cardDetails, setCardDetails] = useState({
         holderName: 'Intestatario Gruppo',
         revolutTag: '@tuorevtag',
@@ -122,6 +123,7 @@ export default function Dashboard() {
             const channel = supabase.channel(`spotishare_settings_${userPlanId}`, {
                 config: { broadcast: { self: false } }
             })
+            settingsChannelRef.current = channel
 
             channel
                 .on('broadcast', { event: 'settings_update' }, ({ payload }: any) => {
@@ -169,6 +171,7 @@ export default function Dashboard() {
                 })
 
             return () => {
+                settingsChannelRef.current = null
                 supabase.removeChannel(channel)
             }
         }
@@ -293,12 +296,13 @@ export default function Dashboard() {
         }
         if (userPlanId && typeof window !== 'undefined') {
             localStorage.setItem(`spotishare_cards_${userPlanId}`, JSON.stringify(cardDetails))
-            const channel = supabase.channel(`spotishare_settings_${userPlanId}`)
-            channel.send({
-                type: 'broadcast',
-                event: 'settings_update',
-                payload: { cardDetails }
-            }).catch(console.warn)
+            if (settingsChannelRef.current) {
+                settingsChannelRef.current.send({
+                    type: 'broadcast',
+                    event: 'settings_update',
+                    payload: { cardDetails }
+                }).catch(console.warn)
+            }
         }
         setIsEditingCards(false)
         showToast('✅ Coordinate carte salvate con successo!', 'success')
@@ -315,12 +319,13 @@ export default function Dashboard() {
         setFamilyAddress(clean)
         if (userPlanId && typeof window !== 'undefined') {
             localStorage.setItem(`spotishare_address_${userPlanId}`, clean)
-            const channel = supabase.channel(`spotishare_settings_${userPlanId}`)
-            channel.send({
-                type: 'broadcast',
-                event: 'settings_update',
-                payload: { familyAddress: clean }
-            }).catch(console.warn)
+            if (settingsChannelRef.current) {
+                settingsChannelRef.current.send({
+                    type: 'broadcast',
+                    event: 'settings_update',
+                    payload: { familyAddress: clean }
+                }).catch(console.warn)
+            }
         }
         setIsEditingAddress(false)
         setAddressInput('')
@@ -360,12 +365,13 @@ export default function Dashboard() {
         setPlaylistUrl(finalUrl)
         if (userPlanId && typeof window !== 'undefined') {
             localStorage.setItem(`spotishare_playlist_${userPlanId}`, finalUrl)
-            const channel = supabase.channel(`spotishare_settings_${userPlanId}`)
-            channel.send({
-                type: 'broadcast',
-                event: 'settings_update',
-                payload: { playlistUrl: finalUrl }
-            }).catch(console.warn)
+            if (settingsChannelRef.current) {
+                settingsChannelRef.current.send({
+                    type: 'broadcast',
+                    event: 'settings_update',
+                    payload: { playlistUrl: finalUrl }
+                }).catch(console.warn)
+            }
         }
         setIsEditingPlaylist(false)
         setCustomPlaylistInput('')
