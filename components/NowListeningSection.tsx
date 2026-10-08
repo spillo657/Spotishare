@@ -170,12 +170,22 @@ export default function NowListeningSection({
   const [showSongPickerModal, setShowSongPickerModal] = useState(false);
   const [customSongTitle, setCustomSongTitle] = useState('');
   const [customSongArtist, setCustomSongArtist] = useState('');
+  const [startImmediatelyOnSelect, setStartImmediatelyOnSelect] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const audioContextRef = useRef<AudioContext | null>(null);
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Storage key with versioning to clear any legacy unsplash URLs
-  const storageKey = `spotishare_listening_v5_${planId || 'default'}`;
+  // Storage key with clean versioning
+  const storageKey = `spotishare_listening_v7_${planId || 'default'}`;
+
+  // Helper to check if a member is the current user
+  const checkIsSelf = (member: Member, index: number): boolean => {
+    if (currentUser?.id && member.id === currentUser.id) return true;
+    if (currentUser?.email && member.email && member.email.toLowerCase() === currentUser.email.toLowerCase()) return true;
+    if (member.name === 'Tu') return true;
+    if (index === 0 && !currentUser) return true;
+    return false;
+  };
 
   // Initialize and persist member listening states
   useEffect(() => {
@@ -184,9 +194,6 @@ export default function NowListeningSection({
     let savedState: Record<string, any> = {};
     if (typeof window !== 'undefined') {
       try {
-        // Clear legacy unsplash cache if present
-        localStorage.removeItem(`spotishare_now_playing_${planId || 'default'}`);
-        localStorage.removeItem(`spotishare_now_playing_v2_${planId || 'default'}`);
         const raw = localStorage.getItem(storageKey);
         if (raw) savedState = JSON.parse(raw);
       } catch (e) {
@@ -195,10 +202,10 @@ export default function NowListeningSection({
     }
 
     const newActivities: MemberActivity[] = members.map((member, index) => {
-      const isSelf = member.id === currentUser?.id;
+      const isSelf = checkIsSelf(member, index);
       const cached = savedState[member.id];
 
-      // Validate cache: ensure no legacy unsplash URL
+      // If user had a cached track with valid URL, restore their exact preference
       if (
         cached &&
         cached.track &&
@@ -210,24 +217,40 @@ export default function NowListeningSection({
           memberName: member.name || (isSelf ? 'Tu' : `Membro #${index + 1}`),
           memberEmail: member.email || '',
           isSelf,
-          isPlaying: typeof cached.isPlaying === 'boolean' ? cached.isPlaying : index % 2 === 0,
+          isPlaying: isSelf ? Boolean(cached.isPlaying) : (typeof cached.isPlaying === 'boolean' ? cached.isPlaying : false),
           track: cached.track,
-          progressSec: cached.progressSec || Math.floor(Math.random() * 80) + 15,
-          lastPlayedText: cached.lastPlayedText || (index % 2 === 0 ? 'In ascolto ora' : '15 min fa'),
+          progressSec: cached.progressSec || 0,
+          lastPlayedText: cached.isPlaying ? 'In ascolto ora' : 'Musica in pausa',
           device: cached.device || DEVICES[index % DEVICES.length]
         };
       }
 
-      // Default deterministic assignment with authentic Spotify artwork
+      // If this is the current user ("Tu"), default strictly to PAUSED / STOPPED so we never fake active music!
+      if (isSelf) {
+        const defaultUserTrack = DEFAULT_TRACK_CATALOG[0];
+        return {
+          memberId: member.id,
+          memberName: member.name || 'Tu',
+          memberEmail: member.email || '',
+          isSelf: true,
+          isPlaying: false, // Default is STOPPED / IN PAUSA
+          track: defaultUserTrack,
+          progressSec: 0,
+          lastPlayedText: 'Musica in pausa',
+          device: 'Spotify su iPhone'
+        };
+      }
+
+      // Default deterministic assignment for other simulated group members
       const track = DEFAULT_TRACK_CATALOG[index % DEFAULT_TRACK_CATALOG.length];
       const isPlaying = index % 3 !== 2;
       const initialProgress = Math.floor(Math.random() * (track.durationSec - 40)) + 20;
 
       return {
         memberId: member.id,
-        memberName: member.name || (isSelf ? 'Tu' : `Membro #${index + 1}`),
+        memberName: member.name || `Membro #${index + 1}`,
         memberEmail: member.email || '',
-        isSelf,
+        isSelf: false,
         isPlaying,
         track,
         progressSec: initialProgress,
@@ -239,7 +262,7 @@ export default function NowListeningSection({
     setActivities(newActivities);
   }, [members, currentUser, planId, storageKey]);
 
-  // Timer to advance progress bars smoothly
+  // Timer to advance progress bars smoothly ONLY for actively playing tracks
   useEffect(() => {
     const interval = setInterval(() => {
       setActivities((prev) =>
@@ -282,6 +305,67 @@ export default function NowListeningSection({
     }
   };
 
+  // Find the current logged-in user activity
+  const myActivity = activities.find((a) => a.isSelf) || activities[0];
+
+  // Micro-action: Stop/Pause current user playback
+  const handlePauseMyPlayback = () => {
+    setActivities((prev) => {
+      const updated = prev.map((act) => {
+        if (act.isSelf) {
+          return {
+            ...act,
+            isPlaying: false,
+            lastPlayedText: 'Musica in pausa'
+          };
+        }
+        return act;
+      });
+      persistActivities(updated);
+      return updated;
+    });
+    showToast('Hai impostato il tuo stato su: Musica in Pausa ⏸️', 'info');
+  };
+
+  // Micro-action: Resume/Play current user playback
+  const handlePlayMyPlayback = () => {
+    setActivities((prev) => {
+      const updated = prev.map((act) => {
+        if (act.isSelf) {
+          return {
+            ...act,
+            isPlaying: true,
+            lastPlayedText: 'In ascolto ora'
+          };
+        }
+        return act;
+      });
+      persistActivities(updated);
+      return updated;
+    });
+    showToast('Riproduzione avviata per il tuo profilo SpotiShare ▶️', 'success');
+  };
+
+  // Micro-action: Reset current user playback completely
+  const handleStopMyPlayback = () => {
+    setActivities((prev) => {
+      const updated = prev.map((act) => {
+        if (act.isSelf) {
+          return {
+            ...act,
+            isPlaying: false,
+            progressSec: 0,
+            lastPlayedText: 'Musica fermata'
+          };
+        }
+        return act;
+      });
+      persistActivities(updated);
+      return updated;
+    });
+    showToast('Musica fermata e avanzamento azzerato ⏹️', 'info');
+  };
+
   // Micro-action: Sincronizza / Ascolta Insieme
   const handleSyncWithMember = (targetMember: MemberActivity) => {
     if (onTriggerConfetti) onTriggerConfetti();
@@ -310,7 +394,7 @@ export default function NowListeningSection({
     );
   };
 
-  // Micro-action: Toggle Play/Pause
+  // Micro-action: Toggle Play/Pause on any row
   const handleTogglePlay = (memberId: string) => {
     setActivities((prev) => {
       const updated = prev.map((act) => {
@@ -319,7 +403,7 @@ export default function NowListeningSection({
           return {
             ...act,
             isPlaying: nextPlaying,
-            lastPlayedText: nextPlaying ? 'In ascolto ora' : 'Poco fa'
+            lastPlayedText: nextPlaying ? 'In ascolto ora' : 'Musica in pausa'
           };
         }
         return act;
@@ -397,16 +481,16 @@ export default function NowListeningSection({
   };
 
   // Change active song for current user
-  const handleSelectTrackForSelf = (track: TrackData) => {
+  const handleSelectTrackForSelf = (track: TrackData, makeActive: boolean = false) => {
     setActivities((prev) => {
       const updated = prev.map((act) => {
         if (act.isSelf) {
           return {
             ...act,
-            isPlaying: true,
+            isPlaying: makeActive,
             track,
             progressSec: 0,
-            lastPlayedText: 'In ascolto ora'
+            lastPlayedText: makeActive ? 'In ascolto ora' : 'Musica in pausa'
           };
         }
         return act;
@@ -416,7 +500,12 @@ export default function NowListeningSection({
     });
 
     setShowSongPickerModal(false);
-    showToast(`Brano impostato: "${track.title}" di ${track.artist}`, 'success');
+    showToast(
+      makeActive
+        ? `Brano impostato e in riproduzione: "${track.title}"`
+        : `Brano impostato (in pausa): "${track.title}"`,
+      'success'
+    );
     if (onTriggerConfetti) onTriggerConfetti();
   };
 
@@ -437,7 +526,7 @@ export default function NowListeningSection({
       audioTheme: 'energetic'
     };
 
-    handleSelectTrackForSelf(newTrack);
+    handleSelectTrackForSelf(newTrack, startImmediatelyOnSelect);
     setCustomSongTitle('');
     setCustomSongArtist('');
   };
@@ -473,7 +562,7 @@ export default function NowListeningSection({
             </span>
           </div>
           <p className="text-xs text-zinc-400 mt-1">
-            Visualizza cosa stanno ascoltando in tempo reale i membri del tuo piano Spotify Family.
+            Visualizza e controlla l'attività musicale in tempo reale del tuo piano Spotify Family.
           </p>
         </div>
 
@@ -525,6 +614,93 @@ export default function NowListeningSection({
         </div>
       </div>
 
+      {/* DEDICATED CONTROL BAR PER L'UTENTE ("TU") */}
+      {myActivity && (
+        <div className="mt-5 p-4 bg-gradient-to-r from-[#1DB954]/10 via-black/40 to-black/40 border border-[#1DB954]/30 rounded-2xl sm:rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="relative w-12 h-12 shrink-0 rounded-2xl overflow-hidden border border-[#1DB954]/40 shadow-md bg-zinc-900">
+              <img
+                src={myActivity.track.coverUrl}
+                alt="Your current track cover"
+                className={`w-full h-full object-cover ${myActivity.isPlaying ? 'opacity-100' : 'opacity-60 grayscale-[30%]'}`}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = DEFAULT_FALLBACK_COVER;
+                }}
+              />
+              {myActivity.isPlaying && (
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                  <div className="flex items-end gap-[2px] h-3 w-3">
+                    <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-1" />
+                    <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-2" />
+                    <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-3" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black text-white">Il tuo stato:</span>
+                {myActivity.isPlaying ? (
+                  <span className="inline-flex items-center gap-1.5 bg-[#1DB954]/20 border border-[#1DB954]/40 text-[#1DB954] text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#1DB954] animate-pulse" />
+                    In Riproduzione
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+                    <span>⏸️</span>
+                    Musica in Pausa / Fermata
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-zinc-300 font-bold truncate mt-1">
+                {myActivity.track.title} <span className="text-zinc-500 font-normal">di</span> {myActivity.track.artist}
+              </p>
+            </div>
+          </div>
+
+          {/* User Quick Controls */}
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {myActivity.isPlaying ? (
+              <button
+                onClick={handlePauseMyPlayback}
+                className="inline-flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm"
+                title="Metti in pausa il tuo stato di ascolto"
+              >
+                <span>⏸️</span>
+                <span>Metti in Pausa</span>
+              </button>
+            ) : (
+              <button
+                onClick={handlePlayMyPlayback}
+                className="inline-flex items-center gap-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 text-[#1DB954] border border-[#1DB954]/40 text-xs font-black px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm"
+                title="Avvia la riproduzione del brano"
+              >
+                <span>▶️</span>
+                <span>Avvia Ascolto</span>
+              </button>
+            )}
+
+            <button
+              onClick={handleStopMyPlayback}
+              className="inline-flex items-center gap-1 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-xs font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95"
+              title="Ferma musica e azzera avanzamento"
+            >
+              <span>⏹️</span>
+              <span>Ferma</span>
+            </button>
+
+            <button
+              onClick={() => setShowSongPickerModal(true)}
+              className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white border border-white/15 text-xs font-extrabold px-3 py-1.5 rounded-xl transition-all active:scale-95"
+            >
+              <span>✏️</span>
+              <span>Cambia Brano</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* TABELLA TRACKLIST SPOTTIFY CON COPERTINE UFFICIALI E LAYOUT AMPIO */}
       <div className="mt-6">
         {filteredActivities.length === 0 ? (
@@ -560,8 +736,10 @@ export default function NowListeningSection({
                 <div
                   key={act.memberId}
                   className={`p-4 bg-black/40 hover:bg-black/60 border ${
-                    act.isPlaying
-                      ? 'border-[#1DB954]/30 hover:border-[#1DB954]/60 shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
+                    act.isSelf
+                      ? 'border-[#1DB954]/40 bg-gradient-to-r from-[#1DB954]/5 to-black/50 shadow-[0_4px_25px_rgba(29,185,84,0.15)]'
+                      : act.isPlaying
+                      ? 'border-[#1DB954]/20 hover:border-[#1DB954]/40 shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
                       : 'border-white/5 hover:border-white/15'
                   } rounded-2xl sm:rounded-3xl transition-all duration-200 flex flex-col lg:grid lg:grid-cols-12 gap-4 lg:items-center`}
                 >
@@ -575,7 +753,7 @@ export default function NowListeningSection({
                         <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-4" />
                       </div>
                     ) : (
-                      <span className="text-zinc-600">{index + 1}</span>
+                      <span className="text-zinc-600">⏸️</span>
                     )}
                   </div>
 
@@ -587,7 +765,7 @@ export default function NowListeningSection({
                         src={act.track.coverUrl}
                         alt={`${act.track.title} album cover`}
                         className={`w-full h-full object-cover ${
-                          act.isPlaying ? 'opacity-100' : 'opacity-70 grayscale-[20%]'
+                          act.isPlaying ? 'opacity-100' : 'opacity-60 grayscale-[25%]'
                         }`}
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = DEFAULT_FALLBACK_COVER;
@@ -629,7 +807,7 @@ export default function NowListeningSection({
                           {act.memberName}
                         </p>
                         {act.isSelf && (
-                          <span className="text-[9px] font-black uppercase tracking-wider bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/30 px-1.5 py-0.2 rounded-md">
+                          <span className="text-[9px] font-black uppercase tracking-wider bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/40 px-2 py-0.5 rounded-md shadow-sm">
                             Tu
                           </span>
                         )}
@@ -689,10 +867,14 @@ export default function NowListeningSection({
                       <span>{isPreviewing ? '🔊' : '🎵'}</span>
                     </button>
 
-                    {/* Simulation toggle */}
+                    {/* Play/Pause Toggle for this user */}
                     <button
                       onClick={() => handleTogglePlay(act.memberId)}
-                      className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white rounded-xl transition-all text-xs"
+                      className={`p-1.5 border rounded-xl transition-all text-xs ${
+                        act.isPlaying
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
+                          : 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
+                      }`}
                       title={act.isPlaying ? 'Metti in pausa' : 'Avvia riproduzione'}
                     >
                       {act.isPlaying ? '⏸' : '▶️'}
@@ -719,7 +901,7 @@ export default function NowListeningSection({
         )}
       </div>
 
-      {/* MODALE DI SELEZIONE BRANO CON RICERCA E COPERTINE REALI */}
+      {/* MODALE DI SELEZIONE BRANO CON RICERCA, COPERTINE REALI E TOGGLE STATO */}
       {showSongPickerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
           <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl max-w-lg w-full relative overflow-hidden ring-1 ring-white/10 max-h-[90vh] flex flex-col justify-between">
@@ -730,10 +912,10 @@ export default function NowListeningSection({
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-xl font-extrabold text-zinc-100 flex items-center gap-2">
-                    <span>🎧</span> Il tuo brano su SpotiShare
+                    <span>🎧</span> Imposta il tuo brano Spotify
                   </h3>
                   <p className="text-xs text-zinc-400 mt-1">
-                    Scegli una traccia dal catalogo o inserisci un brano personalizzato da mostrare al gruppo.
+                    Scegli quale canzone mostrare al gruppo o imposta il tuo stato in pausa.
                   </p>
                 </div>
                 <button
@@ -744,11 +926,27 @@ export default function NowListeningSection({
                 </button>
               </div>
 
+              {/* Quick Actions: Stop/Pause directly */}
+              <div className="flex items-center gap-2 mb-4 p-2.5 bg-white/5 border border-white/10 rounded-2xl">
+                <span className="text-[11px] text-zinc-300 flex-grow font-medium">
+                  Musica fermata su Spotify?
+                </span>
+                <button
+                  onClick={() => {
+                    handlePauseMyPlayback();
+                    setShowSongPickerModal(false);
+                  }}
+                  className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-xl text-xs transition-all"
+                >
+                  ⏸️ Imposta In Pausa
+                </button>
+              </div>
+
               {/* Quick Search */}
               <div className="mb-3">
                 <input
                   type="text"
-                  placeholder="Cerca per titolo o artista..."
+                  placeholder="Cerca per titolo o artista nel catalogo..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-black/50 border border-white/10 rounded-2xl p-3 text-xs text-zinc-100 outline-none focus:ring-2 focus:ring-[#1DB954]/50"
@@ -756,7 +954,7 @@ export default function NowListeningSection({
               </div>
 
               {/* Verified Catalogue List */}
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar mb-4">
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar mb-4">
                 {DEFAULT_TRACK_CATALOG.filter(
                   (t) =>
                     t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -764,7 +962,7 @@ export default function NowListeningSection({
                 ).map((track) => (
                   <div
                     key={track.id}
-                    onClick={() => handleSelectTrackForSelf(track)}
+                    onClick={() => handleSelectTrackForSelf(track, true)}
                     className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-[#1DB954]/10 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group"
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -783,9 +981,11 @@ export default function NowListeningSection({
                         <p className="text-[10px] text-zinc-400 truncate">{track.artist}</p>
                       </div>
                     </div>
-                    <span className="text-xs text-[#1DB954] font-bold bg-[#1DB954]/15 px-3 py-1 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      Seleziona
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs text-[#1DB954] font-bold bg-[#1DB954]/15 px-3 py-1 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                        Scegli ▶️
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -801,25 +1001,36 @@ export default function NowListeningSection({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     type="text"
-                    placeholder="Titolo (es. Starboy)"
+                    placeholder="Titolo esatto (es. Numb)"
                     value={customSongTitle}
                     onChange={(e) => setCustomSongTitle(e.target.value)}
                     className="w-full bg-white/5 border border-white/10 text-xs text-zinc-100 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-[#1DB954]/50"
                   />
                   <input
                     type="text"
-                    placeholder="Artista (es. The Weeknd)"
+                    placeholder="Artista (es. Linkin Park)"
                     value={customSongArtist}
                     onChange={(e) => setCustomSongArtist(e.target.value)}
                     className="w-full bg-white/5 border border-white/10 text-xs text-zinc-100 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-[#1DB954]/50"
                   />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={startImmediatelyOnSelect}
+                      onChange={(e) => setStartImmediatelyOnSelect(e.target.checked)}
+                      className="rounded accent-[#1DB954]"
+                    />
+                    <span>Avvia subito in riproduzione (In ascolto ora)</span>
+                  </label>
                 </div>
                 <button
                   type="submit"
                   disabled={!customSongTitle.trim()}
                   className="w-full bg-gradient-to-r from-[#1DB954] to-emerald-400 text-black font-extrabold py-2 rounded-xl text-xs hover:scale-[1.01] transition-all disabled:opacity-40"
                 >
-                  Imposta come brano in riproduzione
+                  Imposta questo brano per il tuo profilo
                 </button>
               </form>
             </div>
