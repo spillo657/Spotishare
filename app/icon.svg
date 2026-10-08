@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+  <defs>
+    <linearGradient id="spotifyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1ed760" />
+      <stop offset="100%" stop-color="#1DB954" />
+    </linearGradient>
+  </defs>
+
+  <!-- Base Spotify Circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#spotifyGrad)" />
+
+  <!-- Inner Dark Obsidian Glyph: Spotify Waves + Share Network Nodes -->
+  <g fill="none" stroke="#0B0B0F" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Top Arc -->
+    <path d="M 36 46 C 48 38, 76 36, 92 44" stroke-width="9.5" />
+
+    <!-- Middle Arc -->
+    <path d="M 38 64 C 50 56, 74 55, 90 63" stroke-width="8.5" />
+
+    <!-- Bottom Arc -->
+    <path d="M 42 82 C 52 75, 72 74, 86 81" stroke-width="8" />
+
+    <!-- Share Connection Links -->
+    <path d="M 33 64 L 52 45" stroke-width="5" opacity="0.9" />
+    <path d="M 33 64 L 54 81" stroke-width="5" opacity="0.9" />
+  </g>
+
+  <!-- Share Network Nodes -->
+  <!-- Left Central Hub (Admin / Root) -->
+  <circle cx="33" cy="64" r="7.5" fill="#0B0B0F" />
+  <circle cx="33" cy="64" r="3.2" fill="#1ed760" />
+
+  <!-- Right Nodes (Group Members) -->
+  <circle cx="92" cy="44" r="6.5" fill="#0B0B0F" />
+  <circle cx="90" cy="63" r="6" fill="#0B0B0F" />
+  <circle cx="86" cy="81" r="5.5" fill="#0B0B0F" />
+</svg>

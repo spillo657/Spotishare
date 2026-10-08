@@ -6,6 +6,13 @@ import OneSignalInitializer from '@/components/OneSignalInitializer'
 export const metadata: Metadata = {
   title: 'SpotiShare',
   description: 'Gestisci il tuo abbonamento Spotify',
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
 }
 
 export default function RootLayout({
