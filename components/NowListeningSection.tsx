@@ -37,7 +37,9 @@ export interface MemberActivity {
   device: string;
 }
 
-// Authentic verified catalogue covers
+const DEFAULT_FALLBACK_COVER = '/default-cover.svg';
+
+// Verified default catalogue with reliable artwork URLs
 const DEFAULT_TRACK_CATALOG: TrackData[] = [
   {
     id: 'sfera-calcolatrici',
@@ -45,7 +47,7 @@ const DEFAULT_TRACK_CATALOG: TrackData[] = [
     artist: 'Sfera Ebbasta',
     album: 'X2VR',
     durationSec: 204,
-    coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/a4/4f/73/a44f738c-8515-581d-e0fa-0e78c857790b/23UM1IM28532.rgb.jpg/600x600bb.jpg',
+    coverUrl: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02baf89eb11ec7c657805d2da0',
     spotifyUrl: 'https://open.spotify.com/track/10vS59kPzN8vR4378fK8rM',
     genre: 'Trap Italiano',
     audioTheme: 'energetic'
@@ -56,7 +58,7 @@ const DEFAULT_TRACK_CATALOG: TrackData[] = [
     artist: 'Lazza',
     album: 'LOCURA',
     durationSec: 245,
-    coverUrl: 'https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273baf89eb11ec7c657805d2da0',
+    coverUrl: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02baf89eb11ec7c657805d2da0',
     spotifyUrl: 'https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT',
     genre: 'Rap Italiano',
     audioTheme: 'energetic'
@@ -100,7 +102,7 @@ const DEFAULT_TRACK_CATALOG: TrackData[] = [
     artist: 'The Weeknd',
     album: 'After Hours',
     durationSec: 200,
-    coverUrl: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2738863bc11d2aa12b54f5aeb36',
+    coverUrl: 'https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e028863bc11d2aa12b54f5aeb36',
     spotifyUrl: 'https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b',
     genre: 'Synthwave',
     audioTheme: 'electronic'
@@ -151,8 +153,6 @@ const DEFAULT_TRACK_CATALOG: TrackData[] = [
   }
 ];
 
-const DEFAULT_FALLBACK_COVER = 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/a4/4f/73/a44f738c-8515-581d-e0fa-0e78c857790b/23UM1IM28532.rgb.jpg/600x600bb.jpg';
-
 const DEVICES = [
   'Spotify su iPhone',
   'Spotify Desktop (Mac)',
@@ -187,14 +187,15 @@ export default function NowListeningSection({
 
   const [isLiveSpotifyConnected, setIsLiveSpotifyConnected] = useState<boolean>(false);
   const [isSyncingPlayer, setIsSyncingPlayer] = useState<boolean>(false);
+  const [clientSpotifyToken, setClientSpotifyToken] = useState<string | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Storage key with clean versioning
-  const storageKey = `spotishare_listening_v9_${planId || 'default'}`;
+  // Storage key bumped to v10 to purge any stale mock playback cache
+  const storageKey = `spotishare_listening_v10_${planId || 'default'}`;
 
-  // Helper to check if a member is the current user
+  // Check if a member is the current user
   const checkIsSelf = useCallback((member: Member, index: number): boolean => {
     if (currentUser?.id && member.id === currentUser.id) return true;
     if (currentUser?.email && member.email && member.email.toLowerCase() === currentUser.email.toLowerCase()) return true;
@@ -203,10 +204,37 @@ export default function NowListeningSection({
     return false;
   }, [currentUser]);
 
-  // Real-time Spotify API polling via server route
+  // Extract client Spotify token from Supabase session if present
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.provider_token) {
+          setClientSpotifyToken(session.provider_token);
+          // Set cookie on client if not already present
+          if (typeof document !== 'undefined') {
+            document.cookie = `spotify_provider_token=${session.provider_token}; path=/; max-age=3600; SameSite=Lax`;
+          }
+        }
+      } catch (e) {
+        console.warn('Session token check error:', e);
+      }
+    };
+    checkSession();
+  }, []);
+
+  // Real-time Spotify API polling
   const pollServerSpotifyStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/spotify/current', { cache: 'no-store' });
+      const headers: Record<string, string> = {};
+      if (clientSpotifyToken) {
+        headers['Authorization'] = `Bearer ${clientSpotifyToken}`;
+      }
+
+      const res = await fetch('/api/spotify/current', {
+        headers,
+        cache: 'no-store'
+      });
       if (!res.ok) return;
 
       const data = await res.json();
@@ -215,7 +243,7 @@ export default function NowListeningSection({
         setIsLiveSpotifyConnected(true);
 
         if (data.is_playing && data.track) {
-          // Spotify is actively playing a real song
+          // Live Spotify playback detected!
           setActivities(prev => prev.map(act => {
             if (act.isSelf) {
               return {
@@ -244,22 +272,21 @@ export default function NowListeningSection({
           }));
         }
       } else {
-        // Not connected or token expired
         setIsLiveSpotifyConnected(false);
       }
     } catch (err) {
       console.warn('Error polling /api/spotify/current:', err);
     }
-  }, []);
+  }, [clientSpotifyToken]);
 
-  // Poll Spotify status on mount and periodically
+  // Poll Spotify every 3.5s
   useEffect(() => {
     pollServerSpotifyStatus();
     const interval = setInterval(pollServerSpotifyStatus, 3500);
     return () => clearInterval(interval);
   }, [pollServerSpotifyStatus]);
 
-  // Direct Spotify OAuth re-connect action
+  // Connect / Reconnect Spotify OAuth
   const handleConnectSpotifyLive = async () => {
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -279,7 +306,7 @@ export default function NowListeningSection({
     }
   };
 
-  // Initialize and persist member listening states
+  // Initialize member listening states (strictly NO fake isPlaying by default)
   useEffect(() => {
     if (!members || members.length === 0) return;
 
@@ -308,7 +335,7 @@ export default function NowListeningSection({
           memberName: member.name || (isSelf ? 'Tu' : `Membro #${index + 1}`),
           memberEmail: member.email || '',
           isSelf,
-          isPlaying: isSelf ? Boolean(cached.isPlaying) : (typeof cached.isPlaying === 'boolean' ? cached.isPlaying : false),
+          isPlaying: isSelf ? Boolean(cached.isPlaying) : false,
           track: cached.track,
           progressSec: cached.progressSec || 0,
           lastPlayedText: cached.isPlaying ? 'In ascolto ora' : 'Musica in pausa',
@@ -316,7 +343,7 @@ export default function NowListeningSection({
         };
       }
 
-      // Default for current user ("Tu"): Sfera Ebbasta / Paused
+      // Default for current user ("Tu"): Paused with Sfera Ebbasta catalogue entry
       if (isSelf) {
         const defaultUserTrack = DEFAULT_TRACK_CATALOG[0]; // Sfera Ebbasta
         return {
@@ -332,20 +359,17 @@ export default function NowListeningSection({
         };
       }
 
-      // Group members default tracks
+      // Default for group members: Paused / Recent
       const track = DEFAULT_TRACK_CATALOG[(index + 1) % DEFAULT_TRACK_CATALOG.length];
-      const isPlaying = index % 3 !== 2;
-      const initialProgress = Math.floor(Math.random() * (track.durationSec - 40)) + 20;
-
       return {
         memberId: member.id,
         memberName: member.name || `Membro #${index + 1}`,
         memberEmail: member.email || '',
         isSelf: false,
-        isPlaying,
+        isPlaying: false,
         track,
-        progressSec: initialProgress,
-        lastPlayedText: isPlaying ? 'In ascolto ora' : `${(index + 1) * 7} min fa`,
+        progressSec: 0,
+        lastPlayedText: `${(index + 1) * 8} min fa`,
         device: DEVICES[index % DEVICES.length]
       };
     });
@@ -412,9 +436,12 @@ export default function NowListeningSection({
 
     // 1. Send play command to backend API proxy
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (clientSpotifyToken) headers['Authorization'] = `Bearer ${clientSpotifyToken}`;
+
       const res = await fetch('/api/spotify/play', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           uri: trackUri,
           position_ms: Math.max(0, (targetMember.progressSec || 0) * 1000)
@@ -463,7 +490,9 @@ export default function NowListeningSection({
   // Pause playback
   const handlePauseMyPlayback = async () => {
     try {
-      await fetch('/api/spotify/pause', { method: 'POST' });
+      const headers: Record<string, string> = {};
+      if (clientSpotifyToken) headers['Authorization'] = `Bearer ${clientSpotifyToken}`;
+      await fetch('/api/spotify/pause', { method: 'POST', headers });
     } catch (e) {
       console.warn(e);
     }
@@ -492,9 +521,11 @@ export default function NowListeningSection({
         ? myActivity.track.spotifyUrl.split('/track/')[1].split('?')[0]
         : myActivity.track.id;
       try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (clientSpotifyToken) headers['Authorization'] = `Bearer ${clientSpotifyToken}`;
         await fetch('/api/spotify/play', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ uri: `spotify:track:${trackId}` })
         });
       } catch (e) {
@@ -693,6 +724,30 @@ export default function NowListeningSection({
       {/* Ambient Emerald Glow */}
       <div className="absolute top-0 right-0 w-80 h-80 bg-[#1DB954]/10 rounded-full blur-3xl pointer-events-none" />
 
+      {/* BANNER RE-CONNECT SPOTIFY SE NON AUTORIZZATO */}
+      {!isLiveSpotifyConnected && (
+        <div className="mb-6 p-4 bg-gradient-to-r from-amber-500/15 via-black/40 to-black/40 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🔗</span>
+            <div>
+              <p className="text-xs font-black text-amber-300 uppercase tracking-wider">
+                Sincronizzazione Live Spotify Non Attiva
+              </p>
+              <p className="text-xs text-zinc-300">
+                Collega il tuo account Spotify per mostrare automaticamente cosa stai ascoltando e attivare la sincronizzazione.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleConnectSpotifyLive}
+            className="inline-flex items-center justify-center gap-2 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-4 py-2.5 rounded-xl transition-all active:scale-95 shadow-lg shadow-[#1DB954]/25 shrink-0"
+          >
+            <span>🎧</span>
+            <span>Collega Spotify Ora</span>
+          </button>
+        </div>
+      )}
+
       {/* HEADER */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-white/10">
         <div>
@@ -710,14 +765,9 @@ export default function NowListeningSection({
                 Spotify Live Connesso
               </span>
             ) : (
-              <button
-                onClick={handleConnectSpotifyLive}
-                className="text-[10px] uppercase font-black tracking-wider bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3 py-1 rounded-full transition-all flex items-center gap-1.5"
-                title="Clicca per collegare Spotify reale con i permessi di lettura/riproduzione"
-              >
-                <span>⚠️</span>
-                <span>Collega Spotify Live</span>
-              </button>
+              <span className="text-[10px] uppercase font-black tracking-wider bg-zinc-800 text-zinc-400 border border-white/10 px-3 py-1 rounded-full">
+                Pronto per il Sync
+              </span>
             )}
           </div>
           <p className="text-xs text-zinc-400 mt-1">
@@ -727,17 +777,6 @@ export default function NowListeningSection({
 
         {/* CONTROLS */}
         <div className="flex items-center gap-3 flex-wrap shrink-0">
-          {!isLiveSpotifyConnected && (
-            <button
-              onClick={handleConnectSpotifyLive}
-              className="inline-flex items-center gap-1.5 bg-[#1DB954]/15 hover:bg-[#1DB954]/25 text-[#1DB954] border border-[#1DB954]/40 text-xs font-black px-3.5 py-2 rounded-2xl transition-all active:scale-95 shadow-sm"
-              title="Connetti il tuo account Spotify reale"
-            >
-              <span>🔗</span>
-              <span>Connetti Spotify Live</span>
-            </button>
-          )}
-
           {/* Filter Tabs */}
           <div className="flex items-center bg-black/50 p-1 rounded-2xl border border-white/10 text-xs">
             <button
@@ -790,11 +829,12 @@ export default function NowListeningSection({
           <div className="flex items-center gap-3.5 min-w-0">
             <div className="relative w-12 h-12 shrink-0 rounded-2xl overflow-hidden border border-[#1DB954]/40 shadow-md bg-zinc-900">
               <img
-                src={myActivity.track.coverUrl}
+                src={myActivity.track.coverUrl || DEFAULT_FALLBACK_COVER}
                 alt="Your current track cover"
+                referrerPolicy="no-referrer"
                 className={`w-full h-full object-cover ${myActivity.isPlaying ? 'opacity-100' : 'opacity-60 grayscale-[30%]'}`}
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = DEFAULT_FALLBACK_COVER;
+                  e.currentTarget.src = DEFAULT_FALLBACK_COVER;
                 }}
               />
               {myActivity.isPlaying && (
@@ -819,7 +859,7 @@ export default function NowListeningSection({
                 ) : (
                   <span className="inline-flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
                     <span>⏸️</span>
-                    Musica in Pausa / Fermata
+                    {myActivity.lastPlayedText}
                   </span>
                 )}
               </div>
@@ -931,13 +971,14 @@ export default function NowListeningSection({
                   <div className="lg:col-span-4 flex items-center gap-3.5 min-w-0">
                     <div className="relative w-14 h-14 shrink-0 rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 group-hover:scale-105 transition-transform">
                       <img
-                        src={act.track.coverUrl}
+                        src={act.track.coverUrl || DEFAULT_FALLBACK_COVER}
                         alt={`${act.track.title} album cover`}
+                        referrerPolicy="no-referrer"
                         className={`w-full h-full object-cover ${
                           act.isPlaying ? 'opacity-100' : 'opacity-60 grayscale-[25%]'
                         }`}
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = DEFAULT_FALLBACK_COVER;
+                          e.currentTarget.src = DEFAULT_FALLBACK_COVER;
                         }}
                       />
                     </div>
@@ -1136,11 +1177,12 @@ export default function NowListeningSection({
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <img
-                        src={track.coverUrl}
+                        src={track.coverUrl || DEFAULT_FALLBACK_COVER}
                         alt={track.title}
+                        referrerPolicy="no-referrer"
                         className="w-11 h-11 rounded-xl object-cover shrink-0 border border-white/10 shadow-md"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = DEFAULT_FALLBACK_COVER;
+                          e.currentTarget.src = DEFAULT_FALLBACK_COVER;
                         }}
                       />
                       <div className="min-w-0">
