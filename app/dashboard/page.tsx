@@ -407,7 +407,7 @@ export default function Dashboard() {
 
     // --- FETCH DATI SUPABASE ---
     const fetchGroupMembers = async (planId: string) => {
-        const { data } = await supabase.from('users').select('*').eq('plan_id', planId)
+        const { data } = await supabase.from('users').select('*').eq('plan_id', planId).order('role', { ascending: true })
         if (data) setMembers(data)
     }
 

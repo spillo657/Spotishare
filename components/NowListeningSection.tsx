@@ -242,11 +242,12 @@ export default function NowListeningSection({
   }, [showSongPickerModal]);
 
   // Helper to determine if a member is the current user
-  const checkIsSelf = useCallback((member: Member, index: number): boolean => {
-    if (currentUser?.id && member.id === currentUser.id) return true;
-    if (currentUser?.email && member.email && member.email.toLowerCase() === currentUser.email.toLowerCase()) return true;
+  const checkIsSelf = useCallback((member: Member, _index: number): boolean => {
+    if (!currentUser) return false;
+    if (currentUser.id && member.id === currentUser.id) return true;
+    if (currentUser.email && member.email && member.email.toLowerCase() === currentUser.email.toLowerCase()) return true;
+    if (currentUser.user_metadata?.email && member.email && member.email.toLowerCase() === currentUser.user_metadata.email.toLowerCase()) return true;
     if (member.name === 'Tu') return true;
-    if (index === 0 && !currentUser) return true;
     return false;
   }, [currentUser]);
 
@@ -499,9 +500,10 @@ export default function NowListeningSection({
 
           setActivities((prev) =>
             prev.map((act) => {
-              if (act.isSelf) {
+              if (act.isSelf || (currentUser?.id && act.memberId === currentUser.id)) {
                 return {
                   ...act,
+                  isSelf: true,
                   isPlaying: true,
                   track: data.track,
                   progressSec: data.progressSec || 0,
@@ -684,7 +686,22 @@ export default function NowListeningSection({
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  const myActivity = activities.find((a) => a.isSelf) || activities[0];
+  const myActivity = useMemo(() => {
+    const found = activities.find((a) => a.isSelf || (currentUser?.id && a.memberId === currentUser.id));
+    if (found) return found;
+    if (!currentUser) return null;
+    return {
+      memberId: currentUser.id || 'me',
+      memberName: currentUser.user_metadata?.full_name || currentUser.name || 'Tu',
+      memberEmail: currentUser.email || '',
+      track: NO_TRACK,
+      isPlaying: false,
+      progressSec: 0,
+      lastPlayedText: 'Nessun brano in esecuzione',
+      device: 'Spotify Web',
+      isSelf: true
+    };
+  }, [activities, currentUser]);
 
   // REAL SPOTIFY SYNC: Commands real Spotify player & opens song on device
   const handleSyncWithMember = async (targetMember: MemberActivity) => {
@@ -770,9 +787,10 @@ export default function NowListeningSection({
     // Immediate UI feedback
     setActivities((prev) =>
       prev.map((act) => {
-        if (act.isSelf) {
+        if (act.isSelf || (currentUser?.id && act.memberId === currentUser.id)) {
           return {
             ...act,
+            isSelf: true,
             isPlaying: false,
             track: NO_TRACK,
             progressSec: 0,
@@ -804,9 +822,10 @@ export default function NowListeningSection({
 
     setActivities((prev) =>
       prev.map((act) => {
-        if (act.isSelf) {
+        if (act.isSelf || (currentUser?.id && act.memberId === currentUser.id)) {
           return {
             ...act,
+            isSelf: true,
             isPlaying: false,
             track: NO_TRACK,
             progressSec: 0,
@@ -823,7 +842,7 @@ export default function NowListeningSection({
 
   // Resume playback or start a selected track
   const handlePlayMyPlayback = async () => {
-    const trackToPlay = myActivity?.track?.id !== 'none' ? myActivity.track : DEFAULT_TRACK_CATALOG[0];
+    const trackToPlay = (myActivity?.track && myActivity.track.id !== 'none') ? myActivity.track : DEFAULT_TRACK_CATALOG[0];
 
     lastManualTrackSetRef.current = {
       trackId: trackToPlay.id,
@@ -833,9 +852,10 @@ export default function NowListeningSection({
     // Optimistic UI update
     setActivities((prev) =>
       prev.map((act) => {
-        if (act.isSelf) {
+        if (act.isSelf || (currentUser?.id && act.memberId === currentUser.id)) {
           return {
             ...act,
+            isSelf: true,
             isPlaying: true,
             track: trackToPlay,
             lastPlayedText: 'In ascolto ora'
@@ -985,9 +1005,10 @@ export default function NowListeningSection({
     // 3. Optimistic UI update
     setActivities((prev) =>
       prev.map((act) => {
-        if (act.isSelf) {
+        if (act.isSelf || (currentUser?.id && act.memberId === currentUser.id)) {
           return {
             ...act,
+            isSelf: true,
             isPlaying: makeActive,
             track,
             progressSec: 0,
