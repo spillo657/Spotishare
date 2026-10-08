@@ -638,6 +638,48 @@ export default function Dashboard() {
                 }
             </main>
         </div>
+
+        {confirmModal && confirmModal.isOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                <div className="bg-[#121218] border border-white/10 rounded-3xl p-6 shadow-2xl max-w-md w-full ring-1 ring-white/10 relative overflow-hidden animate-in zoom-in-95 duration-150">
+                    <div className={`absolute top-0 left-0 right-0 h-1.5 ${
+                        confirmModal.title.toLowerCase().includes('rimuovi') ||
+                        confirmModal.title.toLowerCase().includes('annulla') ||
+                        confirmModal.title.toLowerCase().includes('elimina')
+                            ? 'bg-gradient-to-r from-red-500 to-rose-600'
+                            : 'bg-gradient-to-r from-[#1DB954] to-[#1ed760]'
+                    }`}></div>
+                    <h3 className="text-xl font-extrabold text-zinc-100 mb-2">
+                        {confirmModal.title}
+                    </h3>
+                    <p className="text-sm text-zinc-400 leading-relaxed mb-6">
+                        {confirmModal.message}
+                    </p>
+                    <div className="flex justify-end gap-3">
+                        <button
+                            onClick={() => setConfirmModal(null)}
+                            className="px-5 py-2.5 rounded-xl border border-white/10 text-zinc-300 hover:text-white hover:bg-white/5 font-semibold text-sm transition-all active:scale-95"
+                        >
+                            Annulla
+                        </button>
+                        <button
+                            onClick={() => {
+                                confirmModal.action()
+                            }}
+                            className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 ${
+                                confirmModal.title.toLowerCase().includes('rimuovi') ||
+                                confirmModal.title.toLowerCase().includes('annulla') ||
+                                confirmModal.title.toLowerCase().includes('elimina')
+                                    ? 'bg-red-500 hover:bg-red-400 text-white shadow-red-500/20'
+                                    : 'bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black shadow-green-500/20 hover:scale-[1.02]'
+                            }`}
+                        >
+                            Conferma
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
 )
 }
