@@ -8,10 +8,12 @@ export const metadata: Metadata = {
   description: 'Gestisci il tuo abbonamento Spotify',
   icons: {
     icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico?v=3', sizes: 'any' },
+      { url: '/icon.svg?v=3', type: 'image/svg+xml' },
+      { url: '/favicon-32.png?v=3', type: 'image/png', sizes: '32x32' },
     ],
-    shortcut: '/icon.svg',
-    apple: '/icon.svg',
+    shortcut: '/favicon.ico?v=3',
+    apple: '/apple-touch-icon.png?v=3',
   },
 }
 
@@ -22,6 +24,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="it">
+      <head>
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+        <link rel="alternate icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      </head>
       <body style={{ margin: 0, padding: 0, backgroundColor: '#121212' }}>
         <ToastProvider>
           <OneSignalInitializer />

@@ -46,6 +46,10 @@ export default function Login() {
                 {/* Subtle Top Gradient for simulated light source */}
                 <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
+                <div className="flex justify-center mb-5">
+                    <img src="/icon.svg" alt="SpotiShare Logo" className="w-16 h-16 drop-shadow-[0_0_20px_rgba(29,185,84,0.5)]" />
+                </div>
+
                 <h1 className="text-3xl font-extrabold tracking-tight text-zinc-100 mb-2">
                     SpotiShare
                 </h1>

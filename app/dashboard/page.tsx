@@ -376,9 +376,12 @@ export default function Dashboard() {
                 )}
 
                 <header className="flex justify-between items-center mb-12 border-b border-white/10 pb-8">
-                    <h1 className="text-3xl font-extrabold tracking-tighter bg-gradient-to-r from-[#1DB954] to-[#1ed760] bg-clip-text text-transparent">
-                        SpotiShare
-                    </h1>
+                    <div className="flex items-center gap-3">
+                        <img src="/icon.svg" alt="SpotiShare Logo" className="w-9 h-9 drop-shadow-[0_0_12px_rgba(29,185,84,0.4)]" />
+                        <h1 className="text-3xl font-extrabold tracking-tighter bg-gradient-to-r from-[#1DB954] to-[#1ed760] bg-clip-text text-transparent">
+                            SpotiShare
+                        </h1>
+                    </div>
                     {user && (
                         <div className="text-right">
                             <p className="font-bold flex items-center justify-end gap-2 text-zinc-100">
