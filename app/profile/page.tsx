@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/utils/supabase';
 import { useToast } from '@/components/ToastContext';
 import { useRouter } from 'next/navigation';
+import {
+  getNotificationPermission,
+  requestNotificationPermission,
+  sendLocalNotification,
+  isNotificationSupported
+} from '@/utils/notifications';
 
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
@@ -12,6 +18,9 @@ export default function ProfilePage() {
   const [userRole, setUserRole] = useState<string>('user');
   const [planName, setPlanName] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
+
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [supportsNotifications, setSupportsNotifications] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -24,6 +33,9 @@ export default function ProfilePage() {
   const router = useRouter();
 
   useEffect(() => {
+    setSupportsNotifications(isNotificationSupported());
+    setNotificationPermission(getNotificationPermission());
+
     async function fetchProfile() {
       try {
         const { data: { user }, error } = await supabase.auth.getUser();
@@ -79,6 +91,30 @@ export default function ProfilePage() {
       showToast("Errore durante l'aggiornamento: " + error.message, 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEnableNotifications = async () => {
+    const result = await requestNotificationPermission();
+    setNotificationPermission(result);
+    if (result === 'granted') {
+      showToast('🔔 Notifiche push attivate con successo!', 'success');
+      await sendLocalNotification('🎵 SpotiShare Notifiche Attive', {
+        body: 'Riceverai promemoria automatici prima di ogni rinnovo del tuo piano Family.'
+      });
+    } else if (result === 'denied') {
+      showToast('⚠️ Notifiche bloccate nelle impostazioni del browser.', 'error');
+    }
+  };
+
+  const handleTestNotification = async () => {
+    const success = await sendLocalNotification('🧪 Test Notifica SpotiShare', {
+      body: 'Le notifiche push funzionano correttamente sul tuo dispositivo!'
+    });
+    if (success) {
+      showToast('Notifica di prova inviata!', 'success');
+    } else {
+      showToast('Abilita prima le notifiche per ricevere i promemoria.', 'info');
     }
   };
 
@@ -225,6 +261,44 @@ export default function ProfilePage() {
                 Salva Modifiche
               </button>
             </form>
+          </div>
+
+          {/* CARD NOTIFICHE PUSH & PROMEMORIA */}
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl ring-1 ring-white/5 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-extrabold uppercase tracking-widest text-zinc-300 flex items-center gap-2">
+                <span>🔔</span> Notifiche & Promemoria Scadenze
+              </h3>
+              <span className={`text-[10px] uppercase tracking-widest font-bold px-2.5 py-0.5 rounded-full border ${
+                notificationPermission === 'granted'
+                  ? 'bg-green-500/10 text-green-400 border-green-500/30'
+                  : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30'
+              }`}>
+                {notificationPermission === 'granted' ? 'Attive ✅' : 'Non Attive'}
+              </span>
+            </div>
+
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Ricevi avvisi automatici direttamente sul tuo smartphone o PC 4 giorni prima del 24 del mese per ricordarti di saldare la quota o verificare i pagamenti del gruppo.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              {notificationPermission !== 'granted' ? (
+                <button
+                  onClick={handleEnableNotifications}
+                  className="w-full sm:w-auto bg-green-500 hover:bg-green-400 text-black font-bold px-5 py-2.5 rounded-xl text-xs transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
+                >
+                  <span>🔔</span> Abilita Notifiche Push
+                </button>
+              ) : (
+                <button
+                  onClick={handleTestNotification}
+                  className="w-full sm:w-auto bg-white/5 hover:bg-white/10 border border-white/15 text-zinc-200 hover:text-white font-bold px-5 py-2.5 rounded-xl text-xs transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <span>🧪</span> Invia Notifica di Prova
+                </button>
+              )}
+            </div>
           </div>
 
           {/* CARD GESTIONE GRUPPO & LOGOUT */}

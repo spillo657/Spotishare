@@ -1,11 +1,20 @@
 import './globals.css'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { ToastProvider } from '@/components/ToastContext'
 import OneSignalInitializer from '@/components/OneSignalInitializer'
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister'
+
+export const viewport: Viewport = {
+  themeColor: '#0B0B0F',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+}
 
 export const metadata: Metadata = {
-  title: 'SpotiShare',
-  description: 'Gestisci il tuo abbonamento Spotify',
+  title: 'SpotiShare • Spotify Family Management',
+  description: 'Gestisci e condividi il tuo abbonamento Spotify Family con il tuo gruppo in totale semplicità',
   manifest: '/manifest.json',
   icons: {
     icon: [
@@ -26,15 +35,15 @@ export default function RootLayout({
   return (
     <html lang="it">
       <head>
-        <meta name="theme-color" content="#0B0B0F" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <link rel="alternate icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
-      <body style={{ margin: 0, padding: 0, backgroundColor: '#121212' }}>
+      <body className="bg-[#0B0B0F] text-zinc-100 antialiased min-h-screen selection:bg-[#1DB954] selection:text-black">
         <ToastProvider>
+          <ServiceWorkerRegister />
           <OneSignalInitializer />
           {children}
         </ToastProvider>

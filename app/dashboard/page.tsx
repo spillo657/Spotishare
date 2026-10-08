@@ -5,6 +5,13 @@ import { useRouter } from 'next/navigation'
 import confetti from 'canvas-confetti'
 import { supabase } from '../../utils/supabase'
 import { useToast } from '@/components/ToastContext'
+import {
+    getNotificationPermission,
+    requestNotificationPermission,
+    sendLocalNotification,
+    checkAndTriggerAutomatedDeadlineReminder,
+    isNotificationSupported
+} from '@/utils/notifications'
 
 export default function Dashboard() {
     const router = useRouter()
@@ -46,12 +53,16 @@ export default function Dashboard() {
     const [isAppInstalled, setIsAppInstalled] = useState(false)
     const [showIOSInstallModal, setShowIOSInstallModal] = useState(false)
 
-    // 2. Playlist Hub
+    // 2. Notifiche Push & Promemoria
+    const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default')
+    const [supportsNotifications, setSupportsNotifications] = useState(false)
+
+    // 3. Playlist Hub
     const [playlistUrl, setPlaylistUrl] = useState<string>('https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M')
     const [isEditingPlaylist, setIsEditingPlaylist] = useState(false)
     const [customPlaylistInput, setCustomPlaylistInput] = useState('')
 
-    // 3. Modal Coordinate Carte & Pagamenti (Revolut, Buddybank, Postepay, BPER)
+    // 4. Modal Coordinate Carte & Pagamenti (Revolut, Buddybank, Postepay, BPER)
     const [showPaymentCardsModal, setShowPaymentCardsModal] = useState(false)
     const [isEditingCards, setIsEditingCards] = useState(false)
     const [cardDetails, setCardDetails] = useState({
@@ -64,7 +75,7 @@ export default function Dashboard() {
         bperIban: 'IT00Z0000000000000000000000'
     })
 
-    // 4. Indirizzo Spotify Family Condiviso
+    // 5. Indirizzo Spotify Family Condiviso
     const [familyAddress, setFamilyAddress] = useState<string>('Via Roma 1, 00100 Roma (RM)')
     const [isEditingAddress, setIsEditingAddress] = useState(false)
     const [addressInput, setAddressInput] = useState('')
@@ -74,6 +85,9 @@ export default function Dashboard() {
 
     // --- CARICAMENTO PREFERENZE SALVATE PER IL GRUPPO ---
     useEffect(() => {
+        setSupportsNotifications(isNotificationSupported())
+        setNotificationPermission(getNotificationPermission())
+
         if (userPlanId && typeof window !== 'undefined') {
             const savedCards = localStorage.getItem(`spotishare_cards_${userPlanId}`)
             if (savedCards) {
@@ -123,6 +137,30 @@ export default function Dashboard() {
             }, 200)
         } catch (e) {
             console.error("Confetti error:", e)
+        }
+    }
+
+    // --- LOGICA NOTIFICHE PUSH ---
+    const handleToggleNotifications = async () => {
+        if (notificationPermission === 'granted') {
+            const success = await sendLocalNotification('🧪 Test Notifica SpotiShare', {
+                body: 'Le notifiche di SpotiShare sono attive e funzionanti sul tuo dispositivo!'
+            })
+            if (success) {
+                showToast('🔔 Notifica di prova inviata!', 'success')
+            }
+        } else {
+            const permission = await requestNotificationPermission()
+            setNotificationPermission(permission)
+            if (permission === 'granted') {
+                showToast('🔔 Notifiche push attivate per le scadenze!', 'success')
+                triggerConfetti()
+                await sendLocalNotification('🎵 SpotiShare Promemoria Attivi', {
+                    body: 'Riceverai promemoria automatici 4 giorni prima del 24 del mese.'
+                })
+            } else if (permission === 'denied') {
+                showToast('⚠️ Notifiche disabilitate nel browser.', 'error')
+            }
         }
     }
 
@@ -393,6 +431,22 @@ export default function Dashboard() {
         return unpaidMonths;
     };
 
+    const myPlan = plans.find(p => p.id === userPlanId)
+    const userDebtCount = calculateUserDebt(user?.id, payments)
+
+    // --- PROMEMORIA PUSH AUTOMATICO SU SCADENZA ---
+    useEffect(() => {
+        if (myPlan && user) {
+            const quota = (myPlan.monthly_cost / myPlan.max_members).toFixed(2)
+            checkAndTriggerAutomatedDeadlineReminder(
+                deadline.daysLeft,
+                deadline.dateString,
+                userDebtCount,
+                quota
+            )
+        }
+    }, [myPlan, user, deadline.daysLeft, deadline.dateString, userDebtCount])
+
     // --- SOLLECITI SMART WHATSAPP (BIDIREZIONALI) ---
     const sendWhatsAppMemberReminder = (member: any, debtCount: number, quota: string) => {
         const totalDue = (debtCount * parseFloat(quota)).toFixed(2)
@@ -612,6 +666,31 @@ export default function Dashboard() {
         })
     }
 
+    const handleLeaveGroup = () => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Abbandona Gruppo",
+            message: "Sei sicuro di voler uscire da questo gruppo Spotify Family?",
+            action: async () => {
+                setIsPaying(true)
+                const { error } = await supabase
+                    .from('users')
+                    .update({ plan_id: null })
+                    .eq('id', user.id)
+
+                if (!error) {
+                    showToast("Hai lasciato il gruppo.", "info")
+                    setUserPlanId(null)
+                    setMembers([])
+                } else {
+                    showToast("Errore durante l'uscita", "error")
+                }
+                setIsPaying(false)
+                setConfirmModal(null)
+            }
+        })
+    }
+
     const handleLogout = () => {
         setConfirmModal({
             isOpen: true,
@@ -630,7 +709,6 @@ export default function Dashboard() {
         })
     }
 
-    const myPlan = plans.find(p => p.id === userPlanId)
     const ringRadius = 36;
     const circumference = 2 * Math.PI * ringRadius;
     const progress = Math.max(0, Math.min(1, deadline.daysLeft / 30));
@@ -643,8 +721,6 @@ export default function Dashboard() {
     const personalAnnualSavings = personalMonthlySavings * 12
     const groupAnnualSavings = myPlan ? Math.max(0, (individualSpotifyPrice * myPlan.max_members - myPlan.monthly_cost) * 12) : 0
     const savingsPercent = Math.round((personalMonthlySavings / individualSpotifyPrice) * 100)
-
-    const userDebtCount = calculateUserDebt(user?.id, payments)
 
     return (
         <div className="min-h-screen bg-[#0B0B0F] text-zinc-100 p-4 sm:p-8 font-sans relative overflow-hidden">
@@ -692,6 +768,20 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex items-center flex-wrap gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
+                        {/* TASTO NOTIFICHE PUSH */}
+                        <button
+                            onClick={handleToggleNotifications}
+                            className={`inline-flex items-center gap-1.5 border text-xs font-bold px-3.5 py-2 rounded-full transition-all active:scale-95 shadow-sm ${
+                                notificationPermission === 'granted'
+                                    ? 'bg-green-500/10 border-green-500/40 text-green-400 hover:bg-green-500/20'
+                                    : 'bg-white/5 border-white/15 hover:border-green-500/50 hover:bg-green-500/10 text-zinc-300 hover:text-green-400'
+                            }`}
+                            title={notificationPermission === 'granted' ? 'Notifiche attive! Clicca per inviare una notifica di prova' : 'Abilita notifiche push sul dispositivo'}
+                        >
+                            <span>🔔</span>
+                            <span>{notificationPermission === 'granted' ? 'Notifiche Attive' : 'Attiva Notifiche'}</span>
+                        </button>
+
                         {/* TASTO MODALE CARTE / IBAN */}
                         {userPlanId && (
                             <button
@@ -912,6 +1002,18 @@ export default function Dashboard() {
                                                 })}
                                             </ul>
                                         </div>
+
+                                        {/* TASTO ABBANDONA GRUPPO PER MEMBRI NON ADMIN */}
+                                        {userRole !== 'admin' && (
+                                            <div className="mt-3 flex justify-end">
+                                                <button
+                                                    onClick={handleLeaveGroup}
+                                                    className="text-[11px] text-zinc-500 hover:text-red-400 hover:bg-red-500/10 px-3 py-1.5 rounded-xl transition-all border border-transparent hover:border-red-500/20"
+                                                >
+                                                    🚪 Abbandona questo gruppo
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* INVITO NUOVI MEMBRI */}
@@ -1269,7 +1371,7 @@ export default function Dashboard() {
                                                                     <span className="text-[10px] text-zinc-500">Data: {new Date(payment.payment_date).toLocaleDateString('it-IT')}</span>
                                                                 </div>
                                                                 <div className="flex items-center gap-3">
-                                                                    <span className="text-[9px] font-bold text-green-400 bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20 uppercase tracking-widest">
+                                                                    <span className="text-[9px] font-bold text-green-400 bg-green-500/10 px-2.5 py-1 rounded-md border border-green-500/20 uppercase tracking-widest">
                                                                         {payment.target_month !== null && payment.target_month !== undefined ? mesiCorti[payment.target_month] : 'N/D'} {payment.target_year || ''}
                                                                     </span>
                                                                     <span className="text-green-400 font-black text-sm">€{payment.amount.toFixed(2)}</span>
@@ -1513,6 +1615,7 @@ export default function Dashboard() {
                             confirmModal.title.toLowerCase().includes('rimuovi') ||
                             confirmModal.title.toLowerCase().includes('annulla') ||
                             confirmModal.title.toLowerCase().includes('elimina') ||
+                            confirmModal.title.toLowerCase().includes('abbandona') ||
                             confirmModal.title.toLowerCase().includes('disconnetti')
                                 ? 'bg-gradient-to-r from-red-500 to-rose-600'
                                 : 'bg-gradient-to-r from-[#1DB954] to-[#1ed760]'
@@ -1538,6 +1641,7 @@ export default function Dashboard() {
                                     confirmModal.title.toLowerCase().includes('rimuovi') ||
                                     confirmModal.title.toLowerCase().includes('annulla') ||
                                     confirmModal.title.toLowerCase().includes('elimina') ||
+                                    confirmModal.title.toLowerCase().includes('abbandona') ||
                                     confirmModal.title.toLowerCase().includes('disconnetti')
                                         ? 'bg-red-500 hover:bg-red-400 text-white shadow-red-500/20'
                                         : 'bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black shadow-green-500/20 hover:scale-[1.02]'
