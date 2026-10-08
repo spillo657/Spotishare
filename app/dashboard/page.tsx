@@ -1085,16 +1085,6 @@ export default function Dashboard() {
                                 </div>
                             </div>
 
-                            {/* SEZIONE COMPLETA: COSA STANNO ASCOLTANDO IN QUESTO MOMENTO SU SPOTIFY */}
-                            <div className="mb-12">
-                                <NowListeningSection
-                                    members={members}
-                                    currentUser={user}
-                                    planId={userPlanId}
-                                    onTriggerConfetti={triggerConfetti}
-                                />
-                            </div>
-
                             {/* SEZIONE 2: WIDGET RISPARMIO + PLAYLIST HUB + INDIRIZZO CONDIVISO */}
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
                                 {/* CARD RISPARMIO COLLETTIVO */}
