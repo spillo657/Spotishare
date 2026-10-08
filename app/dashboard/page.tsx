@@ -508,6 +508,8 @@ export default function Dashboard() {
                                                             🗑️
                                                         </button>
                                                     )}
+                                                    {/* DEBUG */}
+                                                    {userRole === 'admin' && console.log("DEBUG MEMBRO:", { memberId: member.id, userId: user?.id, isAdmin: userRole === 'admin', showButton: member.id !== user?.id })}
                                                 </li>
                                             ))}
                                         </ul>
