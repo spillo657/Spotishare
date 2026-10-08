@@ -364,18 +364,6 @@ export default function Dashboard() {
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-green-500/10 blur-[120px] rounded-full pointer-events-none"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full pointer-events-none"></div>
 
-            <style jsx={\`
-                @keyframes shimmer {
-                    0% { background-position: -200% 0; }
-                    100% { background-position: 200% 0; }
-                }
-                .animate-shimmer {
-                    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-                    background-size: 200% 100%;
-                    animation: shimmer 3s infinite linear;
-                }
-            \`}</style>
-
             <div className="max-w-5xl mx-auto relative z-10">
                 {deadline.isReminderActive && (
                     <div className="mb-8 bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl flex items-center gap-4 animate-pulse backdrop-blur-md">
@@ -429,7 +417,7 @@ export default function Dashboard() {
                                                 </svg>
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                                                     <span className={"text-4xl font-black " + (deadline.daysLeft <= 3 ? 'text-red-500' : 'text-zinc-100')}>
-                                                        \${deadline.daysLeft}
+                                                        {deadline.daysLeft}
                                                     </span>
                                                     <span className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Giorni</span>
                                                 </div>
@@ -476,7 +464,7 @@ export default function Dashboard() {
                                                 const isCurrentMonth = new Date().getMonth() === index && currentYear === selectedTargetYear;
                                                 return (
                                                     <div key={mese} className={"snap-start min-w-[80px] p-3 rounded-full border text-center flex flex-col items-center justify-center transition-all " + (isPaid ? 'bg-green-500/20 text-green-400 border-green-500/30' : isCurrentMonth ? 'animate-pulse bg-amber-500/10 text-amber-500 border-amber-500/30' : 'bg-transparent text-zinc-600 border-white/10')}>
-                                                        <span className="text-[9px] uppercase font-bold mb-1">\${mese}</span>
+                                                        <span className="text-[9px] uppercase font-bold mb-1">{mese}</span>
                                                         <span className="text-lg">{isPaid ? '✅' : isCurrentMonth ? '🔔' : '⏳'}</span>
                                                     </div>
                                                 )
@@ -508,8 +496,6 @@ export default function Dashboard() {
                                                             🗑️
                                                         </button>
                                                     )}
-                                                    {/* DEBUG */}
-                                                    {userRole === 'admin' && console.log("DEBUG MEMBRO:", { memberId: member.id, userId: user?.id, isAdmin: userRole === 'admin', showButton: member.id !== user?.id })}
                                                 </li>
                                             ))}
                                         </ul>
@@ -561,11 +547,11 @@ export default function Dashboard() {
                                             )}
                                             <div className="mt-10 pt-8 border-t border-white/10">
                                                 <h3 className="font-extrabold text-lg mb-2 text-zinc-100">Registra Incasso Manuale</h3>
-                                                <p className="text-xs text-zinc-400 mb-6 leading-relaxed">Segna i pagamenti contanti per il mese selezionato nella tua cassa (\${mesi[selectedTargetMonth]} \${selectedTargetYear}).</p>
+                                                <p className="text-xs text-zinc-400 mb-6 leading-relaxed">Segna i pagamenti contanti per il mese selezionato nella tua cassa ({mesi[selectedTargetMonth]} {selectedTargetYear}).</p>
                                                 <ul className="space-y-3">
                                                     {members.map(member => (
                                                         <li key={member.id} className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5 hover:border-green-500/30 transition-all group">
-                                                            <span className="font-semibold text-zinc-200">\${member.name}</span>
+                                                            <span className="font-semibold text-zinc-200">{member.name}</span>
                                                             <button onClick={() => requestAdminAddPayment(member.id, member.name)} className="text-[10px] bg-transparent border border-green-500/50 text-green-400 font-bold px-4 py-2 rounded-full hover:bg-green-500 hover:text-black transition-all active:scale-95">+ Segna Pagato</button>
                                                         </li>
                                                     ))}
@@ -578,8 +564,8 @@ export default function Dashboard() {
                                                     <h3 className="font-extrabold text-lg mb-3 text-zinc-100">Invita nuovi Membri</h3>
                                                     <p className="text-xs text-zinc-400 mb-4 leading-relaxed">Condividi questo link per permettere ad altri di unirsi al tuo gruppo.</p>
                                                     <div className="flex items-center gap-2 bg-black/40 p-3 rounded-2xl border border-white/10 shadow-inner">
-                                                        <code className="flex-grow text-green-400 font-mono text-xs truncate">\${window.location.origin}/join/\${myPlan?.invite_code || 'generazione...'}</code>
-                                                        <button onClick={async () => { let code = myPlan?.invite_code; if (!code) { showToast("Generazione codice in corso...", "info"); code = await ensureInviteCode(myPlan); } if (!code) { showToast("Errore nella generazione del codice", "error"); return; } navigator.clipboard.writeText(\`\${window.location.origin}/join/\${code}\`); showToast("Link copiato negli appunti!", "success"); setPlans(prev => prev.map(p => p.id === myPlan?.id ? { ...p, invite_code: code } : p)); }} className="bg-green-500 text-black text-[10px] font-bold px-4 py-2 rounded-xl hover:bg-green-400 transition-all active:scale-95">Copia</button>
+                                                        <code className="flex-grow text-green-400 font-mono text-xs truncate">{typeof window !== 'undefined' ? `${window.location.origin}/join/${myPlan?.invite_code || 'generazione...'}` : ''}</code>
+                                                        <button onClick={async () => { let code = myPlan?.invite_code; if (!code) { showToast("Generazione codice in corso...", "info"); code = await ensureInviteCode(myPlan); } if (!code) { showToast("Errore nella generazione del codice", "error"); return; } navigator.clipboard.writeText(`${window.location.origin}/join/${code}`); showToast("Link copiato negli appunti!", "success"); setPlans(prev => prev.map(p => p.id === myPlan?.id ? { ...p, invite_code: code } : p)); }} className="bg-green-500 text-black text-[10px] font-bold px-4 py-2 rounded-xl hover:bg-green-400 transition-all active:scale-95">Copia</button>
                                                     </div>
                                                 </div>
                                                 <div>
@@ -589,12 +575,12 @@ export default function Dashboard() {
                                                             {allGroupPayments.map(payment => (
                                                                 <li key={payment.id} className="flex justify-between items-center text-sm bg-white/5 p-4 rounded-2xl border border-white/5 hover:border-white/10 transition-all group">
                                                                     <div className="flex flex-col">
-                                                                        <span className="font-bold text-zinc-100">\${payment.users?.name || 'Utente'}</span>
-                                                                        <span className="text-[10px] text-zinc-500">Data: \${new Date(payment.payment_date).toLocaleDateString('it-IT')}</span>
+                                                                        <span className="font-bold text-zinc-100">{payment.users?.name || 'Utente'}</span>
+                                                                        <span className="text-[10px] text-zinc-500">Data: {new Date(payment.payment_date).toLocaleDateString('it-IT')}</span>
                                                                     </div>
                                                                     <div className="flex items-center gap-4">
-                                                                        <span className="text-[9px] font-bold text-green-400 bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20 uppercase tracking-widest">\${payment.target_month !== null && payment.target_month !== undefined ? mesiCorti[payment.target_month] : 'N/D'} \${payment.target_year || ''}</span>
-                                                                        <span className="text-green-400 font-black">€\${payment.amount.toFixed(2)}</span>
+                                                                        <span className="text-[9px] font-bold text-green-400 bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20 uppercase tracking-widest">{payment.target_month !== null && payment.target_month !== undefined ? mesiCorti[payment.target_month] : 'N/D'} {payment.target_year || ''}</span>
+                                                                        <span className="text-green-400 font-black">€{payment.amount.toFixed(2)}</span>
                                                                         <button onClick={() => requestDeletePayment(payment.id)} className="text-red-400 bg-red-500/10 p-2 rounded-full hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100" title="Annulla incasso">🗑️</button>
                                                                     </div>
                                                                 </li>
