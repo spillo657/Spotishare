@@ -77,7 +77,7 @@ export default function Dashboard() {
     }
 
     const fetchAllGroupPayments = async (planId: string) => {
-        const { data } = await supabase.from('payments').select(\`\*, users ( name )\`).eq('plan_id', planId).order('payment_date', { ascending: false })
+        const { data } = await supabase.from('payments').select('*, users ( name )').eq('plan_id', planId).order('payment_date', { ascending: false })
         if (data) setAllGroupPayments(data)
     }
 
@@ -196,7 +196,7 @@ export default function Dashboard() {
             const { data: planData, error: planError } = await supabase
                 .from('plans')
                 .insert({
-                    name: \`\${user?.user_metadata?.full_name || 'Il Mio'} Gruppo\`,
+                    name: user?.user_metadata?.full_name ? user.user_metadata.full_name + ' Gruppo' : 'Il Mio Gruppo',
                     monthly_cost: cost,
                     max_members: maxMembers,
                     invite_code: inviteCode
@@ -221,7 +221,7 @@ export default function Dashboard() {
             const { data: membersData } = await supabase.from('users').select('*').eq('plan_id', planData.id);
             if (membersData) setMembers(membersData);
 
-            const { data: paymentsData } = await supabase.from('payments').select(\`\*, users ( name )\`).eq('plan_id', planData.id).order('payment_date', { ascending: false });
+            const { data: paymentsData } = await supabase.from('payments').select('*, users ( name )').eq('plan_id', planData.id).order('payment_date', { ascending: false });
             if (paymentsData) setAllGroupPayments(paymentsData);
 
         } catch (error: any) {
@@ -382,7 +382,7 @@ export default function Dashboard() {
                         <span className="text-2xl">🔔</span>
                         <div>
                             <p className="font-extrabold tracking-tight text-amber-500 text-sm">Scadenza Imminente</p>
-                            <p className="text-xs text-zinc-400 leading-relaxed">Il rinnovo Spotify è tra \${deadline.daysLeft} \${deadline.daysLeft === 1 ? 'giorno' : 'giorni'}. Assicurati di avere fondi sulla carta!</p>
+                            <p className="text-xs text-zinc-400 leading-relaxed">Il rinnovo Spotify è tra {deadline.daysLeft} {deadline.daysLeft === 1 ? 'giorno' : 'giorni'}. Assicurati di avere fondi sulla carta!</p>
                         </div>
                     </div>
                 )}
@@ -395,14 +395,14 @@ export default function Dashboard() {
                         <div className="text-right">
                             <p className="font-bold flex items-center justify-end gap-2 text-zinc-100">
                                 <a href="/profile" className="hover:text-green-400 transition-colors">
-                                    \${user.user_metadata?.full_name || 'Utente'}
+                                    {user.user_metadata?.full_name || 'Utente'}
                                 </a>
                                 {userRole === 'admin' && (
                                     <span className="bg-red-500/20 text-red-400 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-widest font-semibold border border-red-500/30">Admin</span>
                                 )}
                             </p>
                             <p className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 flex items-center justify-end gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> \${dbStatus}
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> {dbStatus}
                             </p>
                         </div>
                     )}
@@ -413,12 +413,12 @@ export default function Dashboard() {
                         <>
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-16">
                                 <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl ring-1 ring-white/5 p-8 relative overflow-hidden flex flex-col justify-between shadow-[0_0_40px_-10px_rgba(29,185,84,0.3)]">
-                                    <div className={\`absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-20 \${deadline.daysLeft <= 3 ? 'bg-red-500' : 'bg-green-500'}\`}></div>
+                                    <div className={"absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-20 " + (deadline.daysLeft <= 3 ? 'bg-red-500' : 'bg-green-500')}></div>
                                     <div className="relative z-10">
                                         <div className="flex justify-between items-center mb-8">
                                             <h2 className="text-xl font-extrabold tracking-tight text-zinc-100">La tua Cassa</h2>
                                             <span className="text-[10px] uppercase tracking-widest font-semibold bg-white/10 px-3 py-1 rounded-full text-zinc-400 border border-white/10">
-                                                Tot: €\${totalUserPaid.toFixed(2)}
+                                                Tot: €{totalUserPaid.toFixed(2)}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-8 mb-10">
@@ -428,7 +428,7 @@ export default function Dashboard() {
                                                     <circle cx="56" cy="56" r={ringRadius} stroke="currentColor" strokeWidth="6" fill="transparent" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" className={\`\${deadline.daysLeft <= 3 ? 'text-red-500' : 'text-green-500'} transition-all duration-1000 ease-in-out\`} />
                                                 </svg>
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                    <span className={\`text-4xl font-black \${deadline.daysLeft <= 3 ? 'text-red-500' : 'text-zinc-100'}\`}>
+                                                    <span className={"text-4xl font-black " + (deadline.daysLeft <= 3 ? 'text-red-500' : 'text-zinc-100')}>
                                                         \${deadline.daysLeft}
                                                     </span>
                                                     <span className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Giorni</span>
@@ -436,16 +436,16 @@ export default function Dashboard() {
                                             </div>
                                             <div>
                                                 <p className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Prossima Scadenza</p>
-                                                <p className="text-2xl font-extrabold tracking-tight text-zinc-100">\${deadline.dateString}</p>
-                                                <p className="text-sm text-zinc-400 mt-1 italic">Quota: €\${(myPlan.monthly_cost / myPlan.max_members).toFixed(2)}</p>
+                                                <p className="text-2xl font-extrabold tracking-tight text-zinc-100">{deadline.dateString}</p>
+                                                <p className="text-sm text-zinc-400 mt-1 italic">Quota: €{(myPlan.monthly_cost / myPlan.max_members).toFixed(2)}</p>
                                             </div>
                                         </div>
                                         <div className="mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl backdrop-blur-md">
                                             <div className="flex justify-between items-center">
                                                 <span className="text-[10px] uppercase tracking-widest font-semibold text-red-400">Situazione Debiti</span>
-                                                <span className={\`text-xs font-bold \${calculateUserDebt(user?.id, payments) > 0 ? 'text-red-500' : 'text-green-400'}\`}>
-                                                    \${calculateUserDebt(user?.id, payments) > 0
-                                                        ? \`Mancano \${calculateUserDebt(user?.id, payments)} mese\${calculateUserDebt(user?.id, payments) > 1 ? 's' : ''}\`
+                                                <span className={"text-xs font-bold " + (calculateUserDebt(user?.id, payments) > 0 ? 'text-red-500' : 'text-green-400')}>
+                                                    {calculateUserDebt(user?.id, payments) > 0
+                                                        ? 'Mancano ' + calculateUserDebt(user?.id, payments) + ' mese' + (calculateUserDebt(user?.id, payments) > 1 ? 's' : '')
                                                         : 'Tutto in regola ✅'}
                                                 </span>
                                             </div>
@@ -465,17 +465,17 @@ export default function Dashboard() {
                                             <button onClick={requestPayment} disabled={isPaying} className="relative group w-full bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black font-bold rounded-full px-6 py-4 shadow-[0_0_20px_rgba(29,185,84,0.4)] hover:shadow-[0_0_30px_rgba(29,185,84,0.6)] transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 overflow-hidden">
                                                 <div className="absolute inset-0 animate-shimmer pointer-events-none"></div>
                                                 <span className="relative z-10 uppercase tracking-tighter">
-                                                    \${isPaying ? 'ELABORAZIONE...' : \`REGISTRA PAGAMENTO \${mesiCorti[selectedTargetMonth].toUpperCase()}\`}
+                                                    {isPaying ? 'ELABORAZIONE...' : 'REGISTRA PAGAMENTO ' + mesiCorti[selectedTargetMonth].toUpperCase()}
                                                 </span>
                                             </button>
                                         </div>
-                                        <h3 className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mt-10 mb-4 border-b border-white/10 pb-2">Status Pagamenti \${selectedTargetYear}</h3>
+                                        <h3 className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mt-10 mb-4 border-b border-white/10 pb-2">Status Pagamenti {selectedTargetYear}</h3>
                                         <div className="flex overflow-x-auto pb-4 gap-3 custom-scrollbar snap-x">
                                             {mesiCorti.map((mese, index) => {
                                                 const isPaid = checkMonthPaid(index, selectedTargetYear, payments);
                                                 const isCurrentMonth = new Date().getMonth() === index && currentYear === selectedTargetYear;
                                                 return (
-                                                    <div key={mese} className={\`snap-start min-w-[80px] p-3 rounded-full border text-center flex flex-col items-center justify-center transition-all \${isPaid ? 'bg-green-500/20 text-green-400 border-green-500/30' : isCurrentMonth ? 'animate-pulse bg-amber-500/10 text-amber-500 border-amber-500/30' : 'bg-transparent text-zinc-600 border-white/10'}\`}>
+                                                    <div key={mese} className={"snap-start min-w-[80px] p-3 rounded-full border text-center flex flex-col items-center justify-center transition-all " + (isPaid ? 'bg-green-500/20 text-green-400 border-green-500/30' : isCurrentMonth ? 'animate-pulse bg-amber-500/10 text-amber-500 border-amber-500/30' : 'bg-transparent text-zinc-600 border-white/10')}>
                                                         <span className="text-[9px] uppercase font-bold mb-1">\${mese}</span>
                                                         <span className="text-lg">\${isPaid ? '✅' : isCurrentMonth ? '🔔' : '⏳'}</span>
                                                     </div>
@@ -495,9 +495,9 @@ export default function Dashboard() {
                                                     </div>
                                                     <div className="flex-grow">
                                                         <p className="font-bold text-zinc-100 flex items-center gap-2">
-                                                            \${member.name} \${member.id === user?.id && <span className="text-green-400 text-[9px] border border-green-400/50 px-2 py-0.5 rounded-full uppercase tracking-widest">Tu</span>}
+                                                            {member.name} {member.id === user?.id && <span className="text-green-400 text-[9px] border border-green-400/50 px-2 py-0.5 rounded-full uppercase tracking-widest">Tu</span>}
                                                         </p>
-                                                        <p className="text-zinc-400 text-xs">\${member.email}</p>
+                                                        <p className="text-zinc-400 text-xs">{member.email}</p>
                                                     </div>
                                                     {userRole === 'admin' && member.id !== user?.id && (
                                                         <button
@@ -524,7 +524,7 @@ export default function Dashboard() {
                                         </h2>
                                         <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-md shadow-lg">
                                             <span className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mr-3">Cassa Totale:</span>
-                                            <span className="text-2xl font-black text-zinc-100">€\${totalGroupPaid.toFixed(2)}</span>
+                                            <span className="text-2xl font-black text-zinc-100">€{totalGroupPaid.toFixed(2)}</span>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
@@ -532,7 +532,7 @@ export default function Dashboard() {
                                             <div className="flex justify-between items-center mb-6">
                                                 <h3 className="font-extrabold text-lg text-zinc-100">Gestione Piano</h3>
                                                 <button onClick={() => { setIsManagingPlan(!isManagingPlan); if(!isManagingPlan) { setPlanCost(myPlan?.monthly_cost.toString() || ''); setPlanMaxMembers(myPlan?.max_members.toString() || ''); } }} className="text-xs text-green-400 hover:text-green-300 font-semibold transition-colors">
-                                                    \${isManagingPlan ? 'Annulla' : 'Modifica'}
+                                                    {isManagingPlan ? 'Annulla' : 'Modifica'}
                                                 </button>
                                             </div>
                                             {isManagingPlan ? (
@@ -551,11 +551,11 @@ export default function Dashboard() {
                                                 <div className="space-y-3">
                                                     <div className="flex justify-between text-sm p-3 bg-white/5 rounded-xl border border-white/5">
                                                         <span className="text-zinc-400">Costo Mensile:</span>
-                                                        <span className="font-bold text-zinc-100">€\${myPlan?.monthly_cost.toFixed(2)}</span>
+                                                        <span className="font-bold text-zinc-100">€{myPlan?.monthly_cost.toFixed(2)}</span>
                                                     </div>
                                                     <div className="flex justify-between text-sm p-3 bg-white/5 rounded-xl border border-white/5">
                                                         <span className="text-zinc-400">Membri Max:</span>
-                                                        <span className="font-bold text-zinc-100">\${myPlan?.max_members}</span>
+                                                        <span className="font-bold text-zinc-100">{myPlan?.max_members}</span>
                                                     </div>
                                                 </div>
                                             )}

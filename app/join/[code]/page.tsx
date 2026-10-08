@@ -22,6 +22,7 @@ export default function JoinPlanPage() {
       }
 
       try {
+        console.log('Checking invite code:', code);
         // 1. Verify the invite code exists and get plan details
         const { data: plan, error: planError } = await supabase
           .from('plans')
