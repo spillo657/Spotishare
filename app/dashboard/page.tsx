@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import confetti from 'canvas-confetti'
 import { supabase } from '../../utils/supabase'
 import { useToast } from '@/components/ToastContext'
+import NowListeningSection from '@/components/NowListeningSection'
 import {
     getNotificationPermission,
     requestNotificationPermission,
@@ -80,79 +81,6 @@ export default function Dashboard() {
     const [isEditingAddress, setIsEditingAddress] = useState(false)
     const [addressInput, setAddressInput] = useState('')
 
-    // 6. Spotify Live Activity (Cosa stanno ascoltando i partecipanti)
-    interface ListeningTrack {
-        title: string;
-        artist: string;
-        album: string;
-        coverUrl: string;
-        spotifyUrl: string;
-        isPlaying: boolean;
-        progress: number;
-    }
-
-    const defaultCatalog: ListeningTrack[] = [
-        {
-            title: "BIRDS OF A FEATHER",
-            artist: "Billie Eilish",
-            album: "HIT ME HARD AND SOFT",
-            coverUrl: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300&auto=format&fit=crop&q=80",
-            spotifyUrl: "https://open.spotify.com/track/6dOtVTDmMPzgLT7E396G7X",
-            isPlaying: true,
-            progress: 68
-        },
-        {
-            title: "Espresso",
-            artist: "Sabrina Carpenter",
-            album: "Short n' Sweet",
-            coverUrl: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&auto=format&fit=crop&q=80",
-            spotifyUrl: "https://open.spotify.com/track/2qSkXiDgNd5b0G3IDj8QQa",
-            isPlaying: true,
-            progress: 45
-        },
-        {
-            title: "Die With A Smile",
-            artist: "Lady Gaga, Bruno Mars",
-            album: "Die With A Smile",
-            coverUrl: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&auto=format&fit=crop&q=80",
-            spotifyUrl: "https://open.spotify.com/track/2plbrEY59IikOBNo5VM7tl",
-            isPlaying: true,
-            progress: 82
-        },
-        {
-            title: "Starboy",
-            artist: "The Weeknd, Daft Punk",
-            album: "Starboy",
-            coverUrl: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80",
-            spotifyUrl: "https://open.spotify.com/track/7MXVkk9YM5qdOxW8juMDU9",
-            isPlaying: false,
-            progress: 100
-        },
-        {
-            title: "Storie Brevi",
-            artist: "Tananai, Annalisa",
-            album: "Storie Brevi",
-            coverUrl: "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=300&auto=format&fit=crop&q=80",
-            spotifyUrl: "https://open.spotify.com/track/1BxfuPKGuaTgP7aM0fbdwr",
-            isPlaying: true,
-            progress: 35
-        },
-        {
-            title: "Blinding Lights",
-            artist: "The Weeknd",
-            album: "After Hours",
-            coverUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300&auto=format&fit=crop&q=80",
-            spotifyUrl: "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b",
-            isPlaying: true,
-            progress: 55
-        }
-    ];
-
-    const [memberTracks, setMemberTracks] = useState<Record<string, ListeningTrack>>({})
-    const [showSongPickerModal, setShowSongPickerModal] = useState(false)
-    const [customSongTitle, setCustomSongTitle] = useState('')
-    const [customSongArtist, setCustomSongArtist] = useState('')
-
     const mesi = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
     const mesiCorti = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic']
 
@@ -182,55 +110,6 @@ export default function Dashboard() {
             }
         }
     }, [userPlanId])
-
-    // --- CARICAMENTO BRANI IN ASCOLTO SPOTIFY PER I MEMBRI ---
-    useEffect(() => {
-        if (members.length > 0) {
-            setMemberTracks(prev => {
-                const next = { ...prev }
-                members.forEach((m, idx) => {
-                    if (!next[m.id]) {
-                        const saved = typeof window !== 'undefined' ? localStorage.getItem(`spotishare_song_${m.id}`) : null
-                        if (saved) {
-                            try {
-                                next[m.id] = JSON.parse(saved)
-                            } catch {
-                                next[m.id] = defaultCatalog[idx % defaultCatalog.length]
-                            }
-                        } else {
-                            next[m.id] = defaultCatalog[idx % defaultCatalog.length]
-                        }
-                    }
-                })
-                return next
-            })
-        }
-    }, [members])
-
-    const handleUpdateMySong = (song: { title: string; artist: string; album?: string; coverUrl?: string; spotifyUrl?: string; isPlaying?: boolean }) => {
-        if (!user) return
-        const newTrack: ListeningTrack = {
-            title: song.title || "Brano Personalizzato",
-            artist: song.artist || "Artista Spotify",
-            album: song.album || "Spotify Single",
-            coverUrl: song.coverUrl || "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80",
-            spotifyUrl: song.spotifyUrl || "https://open.spotify.com",
-            isPlaying: song.isPlaying !== undefined ? song.isPlaying : true,
-            progress: Math.floor(Math.random() * 60) + 20
-        }
-        setMemberTracks(prev => ({
-            ...prev,
-            [user.id]: newTrack
-        }))
-        if (typeof window !== 'undefined') {
-            localStorage.setItem(`spotishare_song_${user.id}`, JSON.stringify(newTrack))
-        }
-        setShowSongPickerModal(false)
-        setCustomSongTitle('')
-        setCustomSongArtist('')
-        showToast('🎵 Brano in riproduzione aggiornato con successo!', 'success')
-        triggerConfetti()
-    }
 
     // --- MICRO-INTERAZIONE: EFFETTO CONFETTI ---
     const triggerConfetti = () => {
@@ -1092,7 +971,6 @@ export default function Dashboard() {
                                                 {members.map((member) => {
                                                     const memberDebt = calculateUserDebt(member.id, allGroupPayments.length > 0 ? allGroupPayments : payments)
                                                     const isMemberAdmin = member.role === 'admin'
-                                                    const memberTrack = memberTracks[member.id] || defaultCatalog[0]
                                                     return (
                                                         <li key={member.id} className="p-3.5 flex items-center gap-3.5 hover:bg-white/5 transition-all rounded-2xl group">
                                                             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/15 text-green-400 flex items-center justify-center font-black text-lg shadow-inner shrink-0 group-hover:scale-105 transition-transform">
@@ -1122,25 +1000,6 @@ export default function Dashboard() {
                                                                         </span>
                                                                     )}
                                                                 </div>
-
-                                                                {/* BADGE MINI EQUALIZER BRANO IN ASCOLTO */}
-                                                                {memberTrack && (
-                                                                    <div className="flex items-center gap-1.5 mt-1.5 bg-black/40 border border-white/5 px-2 py-0.5 rounded-lg w-fit">
-                                                                        {memberTrack.isPlaying ? (
-                                                                            <div className="flex items-end gap-[1.5px] h-3 w-3 shrink-0">
-                                                                                <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-1" />
-                                                                                <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-2" />
-                                                                                <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-3" />
-                                                                                <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-4" />
-                                                                            </div>
-                                                                        ) : (
-                                                                            <span className="text-[9px] text-zinc-500">⏸️</span>
-                                                                        )}
-                                                                        <span className="text-[10px] text-zinc-300 font-medium truncate max-w-[170px] sm:max-w-[210px]">
-                                                                            {memberTrack.title} <span className="text-zinc-500">• {memberTrack.artist}</span>
-                                                                        </span>
-                                                                    </div>
-                                                                )}
                                                             </div>
 
                                                             {/* AZIONI MEMBRO: SOLLECITO WHATSAPP E RIMOZIONE */}
@@ -1183,109 +1042,13 @@ export default function Dashboard() {
                                         )}
                                     </div>
 
-                                    {/* SEZIONE COMPLETA: COSA STANNO ASCOLTANDO IN QUESTO MOMENTO SU SPOTIFY */}
-                                    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl ring-1 ring-white/5 relative overflow-hidden">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <div className="flex items-center gap-2.5">
-                                                <span className="relative flex h-3 w-3">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-[#1DB954]"></span>
-                                                </span>
-                                                <div>
-                                                    <h3 className="text-base font-extrabold text-zinc-100 flex items-center gap-2">
-                                                        <span>🎧</span> In Ascolto Ora su Spotify
-                                                    </h3>
-                                                    <p className="text-[10px] text-zinc-400 font-medium">
-                                                        Attività musicale in tempo reale dei partecipanti
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => setShowSongPickerModal(true)}
-                                                className="text-[10px] text-green-400 hover:text-green-300 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 px-3 py-1.5 rounded-full font-bold transition-all shrink-0 active:scale-95 shadow-sm flex items-center gap-1"
-                                            >
-                                                <span>🎵</span>
-                                                <span>Il tuo brano</span>
-                                            </button>
-                                        </div>
-
-                                        <div className="space-y-3">
-                                            {members.map((member) => {
-                                                const track = memberTracks[member.id] || defaultCatalog[0]
-                                                return (
-                                                    <div key={`live-card-${member.id}`} className="p-3.5 bg-black/40 border border-white/5 hover:border-green-500/30 rounded-2xl transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 group">
-                                                        <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">
-                                                            {/* VINILE + COPERTINA CON ANIMAZIONE ROTANTE A TEMA */}
-                                                            <div className="relative w-12 h-12 shrink-0">
-                                                                {/* Vinile rotante */}
-                                                                {track.isPlaying && (
-                                                                    <div className="absolute -right-2 top-0 w-12 h-12 rounded-full bg-gradient-to-tr from-zinc-950 via-zinc-900 to-black border border-zinc-700/60 shadow-md flex items-center justify-center animate-vinyl pointer-events-none">
-                                                                        <div className="w-5 h-5 rounded-full bg-green-500/20 border border-green-400/40 flex items-center justify-center">
-                                                                            <div className="w-2 h-2 rounded-full bg-[#1DB954]"></div>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                                {/* Copertina album */}
-                                                                <img
-                                                                    src={track.coverUrl}
-                                                                    alt={track.album}
-                                                                    className="relative z-10 w-12 h-12 rounded-xl object-cover border border-white/10 shadow-lg group-hover:scale-105 transition-transform"
-                                                                />
-                                                            </div>
-
-                                                            {/* INFO BRANO E ASCOLTATORE */}
-                                                            <div className="min-w-0 flex-grow">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-xs font-bold text-zinc-300 truncate">
-                                                                        {member.name || 'Membro'}
-                                                                    </span>
-                                                                    {member.id === user?.id && (
-                                                                        <span className="text-[8px] bg-green-500/15 text-green-400 font-bold px-1.5 py-0.2 rounded border border-green-500/30 uppercase">Tu</span>
-                                                                    )}
-                                                                    {track.isPlaying ? (
-                                                                        <span className="text-[9px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20 font-bold flex items-center gap-1 shrink-0">
-                                                                            <div className="flex items-end gap-[1.5px] h-2.5 w-2.5">
-                                                                                <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-1" />
-                                                                                <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-2" />
-                                                                                <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-3" />
-                                                                                <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-4" />
-                                                                            </div>
-                                                                            In riproduzione
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span className="text-[9px] text-zinc-500 bg-white/5 px-2 py-0.5 rounded-full font-semibold">
-                                                                            In pausa
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-
-                                                                <p className="text-sm font-extrabold text-zinc-100 truncate mt-0.5 flex items-center gap-1.5">
-                                                                    {track.title}
-                                                                </p>
-                                                                <p className="text-xs text-zinc-400 truncate">
-                                                                    {track.artist}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* AZIONE DI ASCOLTO / APRI IN SPOTIFY */}
-                                                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0 w-full sm:w-auto justify-end">
-                                                            <a
-                                                                href={track.spotifyUrl}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="inline-flex items-center gap-1.5 bg-green-500/15 hover:bg-[#1DB954] text-green-400 hover:text-black border border-green-500/30 text-xs font-bold px-3.5 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
-                                                                title="Apri e ascolta questo brano su Spotify"
-                                                            >
-                                                                <img src="/icon.svg" alt="Spotify" className="w-3.5 h-3.5" />
-                                                                <span>Ascolta</span>
-                                                            </a>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
-                                    </div>
+                                    {/* SEZIONE SPOTIFY LIVE LISTENING ACTIVITY */}
+                                    <NowListeningSection
+                                        members={members}
+                                        currentUser={user}
+                                        planId={userPlanId}
+                                        onTriggerConfetti={triggerConfetti}
+                                    />
 
                                     {/* INVITO NUOVI MEMBRI */}
                                     <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-xl ring-1 ring-white/5">
@@ -1320,6 +1083,16 @@ export default function Dashboard() {
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* SEZIONE COMPLETA: COSA STANNO ASCOLTANDO IN QUESTO MOMENTO SU SPOTIFY */}
+                            <div className="mb-12">
+                                <NowListeningSection
+                                    members={members}
+                                    currentUser={user}
+                                    planId={userPlanId}
+                                    onTriggerConfetti={triggerConfetti}
+                                />
                             </div>
 
                             {/* SEZIONE 2: WIDGET RISPARMIO + PLAYLIST HUB + INDIRIZZO CONDIVISO */}
@@ -1945,108 +1718,6 @@ export default function Dashboard() {
                         >
                             Ho capito
                         </button>
-                    </div>
-                </div>
-            )}
-
-            {/* MODALE SELEZIONE BRANO IN ASCOLTO (SPOTIFY LIVE ACTIVITY) */}
-            {showSongPickerModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150 overflow-y-auto">
-                    <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl max-w-lg w-full relative overflow-hidden my-8">
-                        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-[#1ed760]"></div>
-
-                        <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h3 className="text-xl font-extrabold text-zinc-100 flex items-center gap-2">
-                                    <span>🎵</span> Il tuo Brano in Ascolto
-                                </h3>
-                                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                                    Condividi con i membri del gruppo Spotify Family cosa stai riproducendo in questo momento.
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setShowSongPickerModal(false)}
-                                className="text-zinc-400 hover:text-white p-2 rounded-full hover:bg-white/10 text-sm"
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        {/* SELEZIONE RAPIDA BRANI TOP HITS */}
-                        <div className="mb-6">
-                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-2">
-                                Scegli tra i brani di tendenza:
-                            </label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                                {defaultCatalog.map((cat, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => handleUpdateMySong(cat)}
-                                        className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-green-500/15 border border-white/5 hover:border-green-500/30 rounded-2xl transition-all text-left group"
-                                    >
-                                        <img src={cat.coverUrl} alt={cat.album} className="w-10 h-10 rounded-xl object-cover shrink-0 group-hover:scale-105 transition-transform shadow-md" />
-                                        <div className="min-w-0 flex-grow">
-                                            <p className="text-xs font-bold text-zinc-100 truncate group-hover:text-green-400 transition-colors">
-                                                {cat.title}
-                                            </p>
-                                            <p className="text-[10px] text-zinc-400 truncate">
-                                                {cat.artist}
-                                            </p>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* FORM INSERIMENTO BRANO PERSONALIZZATO */}
-                        <div className="pt-4 border-t border-white/10 space-y-3">
-                            <label className="text-[10px] uppercase font-bold text-zinc-400 block">
-                                Oppure inserisci un brano personalizzato:
-                            </label>
-                            <div>
-                                <input
-                                    type="text"
-                                    placeholder="Titolo della canzone (es. Bohemian Rhapsody)"
-                                    value={customSongTitle}
-                                    onChange={(e) => setCustomSongTitle(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 text-xs text-zinc-100 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50"
-                                />
-                            </div>
-                            <div>
-                                <input
-                                    type="text"
-                                    placeholder="Nome dell'Artista (es. Queen)"
-                                    value={customSongArtist}
-                                    onChange={(e) => setCustomSongArtist(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 text-xs text-zinc-100 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50"
-                                />
-                            </div>
-                            <button
-                                onClick={() => {
-                                    if (!customSongTitle.trim()) {
-                                        showToast('Inserisci almeno il titolo del brano', 'info')
-                                        return
-                                    }
-                                    handleUpdateMySong({
-                                        title: customSongTitle.trim(),
-                                        artist: customSongArtist.trim() || 'Artista',
-                                        isPlaying: true
-                                    })
-                                }}
-                                className="w-full bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black font-extrabold py-3 rounded-xl hover:scale-[1.01] transition-all text-xs uppercase shadow-md shadow-green-500/20"
-                            >
-                                Imposta come Brano in Ascolto
-                            </button>
-                        </div>
-
-                        <div className="mt-6 pt-3 border-t border-white/10 flex justify-end">
-                            <button
-                                onClick={() => setShowSongPickerModal(false)}
-                                className="w-full sm:w-auto px-5 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all"
-                            >
-                                Chiudi
-                            </button>
-                        </div>
                     </div>
                 </div>
             )}
