@@ -1,11 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import confetti from 'canvas-confetti'
 import { supabase } from '../../utils/supabase'
 import { useToast } from '@/components/ToastContext'
 
 export default function Dashboard() {
+    const router = useRouter()
+
     // --- STATI PRINCIPALI ---
     const [user, setUser] = useState<any>(null)
     const [userRole, setUserRole] = useState<string>('user')
@@ -48,8 +51,50 @@ export default function Dashboard() {
     const [isEditingPlaylist, setIsEditingPlaylist] = useState(false)
     const [customPlaylistInput, setCustomPlaylistInput] = useState('')
 
+    // 3. Modal Coordinate Carte & Pagamenti (Revolut, Buddybank, Postepay, BPER)
+    const [showPaymentCardsModal, setShowPaymentCardsModal] = useState(false)
+    const [isEditingCards, setIsEditingCards] = useState(false)
+    const [cardDetails, setCardDetails] = useState({
+        holderName: 'Intestatario Gruppo',
+        revolutTag: '@tuorevtag',
+        revolutIban: 'IT00X0000000000000000000000',
+        buddybankIban: 'IT00Y0000000000000000000000',
+        postepayCardNumber: '0000 0000 0000 0000',
+        postepayFiscalCode: 'XXXXXX00X00X000X',
+        bperIban: 'IT00Z0000000000000000000000'
+    })
+
+    // 4. Indirizzo Spotify Family Condiviso
+    const [familyAddress, setFamilyAddress] = useState<string>('Via Roma 1, 00100 Roma (RM)')
+    const [isEditingAddress, setIsEditingAddress] = useState(false)
+    const [addressInput, setAddressInput] = useState('')
+
     const mesi = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
     const mesiCorti = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic']
+
+    // --- CARICAMENTO PREFERENZE SALVATE PER IL GRUPPO ---
+    useEffect(() => {
+        if (userPlanId && typeof window !== 'undefined') {
+            const savedCards = localStorage.getItem(`spotishare_cards_${userPlanId}`)
+            if (savedCards) {
+                try {
+                    setCardDetails(JSON.parse(savedCards))
+                } catch (e) {
+                    console.error(e)
+                }
+            }
+
+            const savedAddress = localStorage.getItem(`spotishare_address_${userPlanId}`)
+            if (savedAddress) {
+                setFamilyAddress(savedAddress)
+            }
+
+            const savedPlaylist = localStorage.getItem(`spotishare_playlist_${userPlanId}`)
+            if (savedPlaylist) {
+                setPlaylistUrl(savedPlaylist)
+            }
+        }
+    }, [userPlanId])
 
     // --- MICRO-INTERAZIONE: EFFETTO CONFETTI ---
     const triggerConfetti = () => {
@@ -130,14 +175,35 @@ export default function Dashboard() {
         }
     }
 
-    // --- LOGICA PLAYLIST HUB ---
-    useEffect(() => {
-        if (userPlanId && typeof window !== 'undefined') {
-            const saved = localStorage.getItem(`spotishare_playlist_${userPlanId}`)
-            if (saved) setPlaylistUrl(saved)
+    // --- COPIA NEGLI APPUNTI ---
+    const copyToClipboard = (text: string, label: string) => {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+            navigator.clipboard.writeText(text)
+            showToast(`📋 ${label} copiato negli appunti!`, 'success')
         }
-    }, [userPlanId])
+    }
 
+    const saveCardsSettings = () => {
+        if (userPlanId && typeof window !== 'undefined') {
+            localStorage.setItem(`spotishare_cards_${userPlanId}`, JSON.stringify(cardDetails))
+        }
+        setIsEditingCards(false)
+        showToast('✅ Coordinate carte salvate con successo!', 'success')
+    }
+
+    const saveAddressSettings = () => {
+        const clean = addressInput.trim()
+        if (!clean) return
+        setFamilyAddress(clean)
+        if (userPlanId && typeof window !== 'undefined') {
+            localStorage.setItem(`spotishare_address_${userPlanId}`, clean)
+        }
+        setIsEditingAddress(false)
+        setAddressInput('')
+        showToast('📍 Indirizzo Spotify Family salvato!', 'success')
+    }
+
+    // --- LOGICA PLAYLIST HUB ---
     const getSpotifyEmbedUrl = (url: string) => {
         try {
             if (!url) return 'https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M?utm_source=generator&theme=0'
@@ -328,7 +394,6 @@ export default function Dashboard() {
     };
 
     // --- SOLLECITI SMART WHATSAPP (BIDIREZIONALI) ---
-    // 1. Admin sollecita Membro moroso
     const sendWhatsAppMemberReminder = (member: any, debtCount: number, quota: string) => {
         const totalDue = (debtCount * parseFloat(quota)).toFixed(2)
         const text = `Ciao ${member.name || 'amico'}! 🎵 Ti ricordo che su SpotiShare risultano ${debtCount} quota/e in sospeso (totale: €${totalDue}) per il nostro gruppo Spotify Family. Fammi sapere quando riesci a saldare! 🙌`
@@ -336,7 +401,6 @@ export default function Dashboard() {
         window.open(url, '_blank')
     }
 
-    // 2. Membro sollecita Admin a rinnovare Spotify
     const sendWhatsAppAdminReminder = () => {
         const admin = members.find(m => m.role === 'admin') || { name: 'Admin' }
         const text = `Ciao ${admin.name}! 🎵 Ti ricordo che la scadenza per il rinnovo del nostro abbonamento Spotify Family è il ${deadline.dateString} (tra ${deadline.daysLeft} giorni). Il gruppo SpotiShare è pronto! 🎶`
@@ -431,8 +495,8 @@ export default function Dashboard() {
         const targetMonthName = mesi[selectedTargetMonth]
         setConfirmModal({
             isOpen: true,
-            title: "Conferma Pagamento",
-            message: 'Stai per versare la quota di €' + quota + ' per saldare il mese di ' + targetMonthName + ' ' + selectedTargetYear + '. Confermi?',
+            title: "Conferma Pagamento Quota",
+            message: 'Stai per confermare il versamento della quota di €' + quota + ' per il mese di ' + targetMonthName + ' ' + selectedTargetYear + '. Confermi di aver inviato il pagamento?',
             action: async () => {
                 setIsPaying(true)
                 const { error } = await supabase.from('payments').insert({
@@ -548,6 +612,24 @@ export default function Dashboard() {
         })
     }
 
+    const handleLogout = () => {
+        setConfirmModal({
+            isOpen: true,
+            title: "Disconnetti Account",
+            message: "Vuoi davvero uscire da SpotiShare?",
+            action: async () => {
+                try {
+                    await supabase.auth.signOut()
+                    showToast("Disconnessione effettuata", "info")
+                    router.push('/login')
+                } catch (e: any) {
+                    showToast("Errore durante il logout", "error")
+                }
+                setConfirmModal(null)
+            }
+        })
+    }
+
     const myPlan = plans.find(p => p.id === userPlanId)
     const ringRadius = 36;
     const circumference = 2 * Math.PI * ringRadius;
@@ -609,7 +691,19 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    <div className="flex items-center flex-wrap gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                    <div className="flex items-center flex-wrap gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
+                        {/* TASTO MODALE CARTE / IBAN */}
+                        {userPlanId && (
+                            <button
+                                onClick={() => setShowPaymentCardsModal(true)}
+                                className="inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-green-500/40 text-green-400 hover:bg-green-500 hover:text-black text-xs font-bold px-3.5 py-2 rounded-full transition-all active:scale-95 shadow-sm"
+                                title="Visualizza le coordinate bancarie e carte per effettuare il bonifico"
+                            >
+                                <span>💳</span>
+                                <span>Coordinate Carte / IBAN</span>
+                            </button>
+                        )}
+
                         {/* TASTO INSTALLAZIONE PWA */}
                         {!isAppInstalled && (
                             <button
@@ -623,7 +717,7 @@ export default function Dashboard() {
                         )}
 
                         {user && (
-                            <div className="text-right flex items-center gap-3">
+                            <div className="flex items-center gap-3">
                                 <div className="text-right">
                                     <p className="font-bold flex items-center justify-end gap-2 text-zinc-100 text-sm">
                                         <a href="/profile" className="hover:text-green-400 transition-colors">
@@ -637,6 +731,13 @@ export default function Dashboard() {
                                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> {dbStatus}
                                     </p>
                                 </div>
+                                <button
+                                    onClick={handleLogout}
+                                    className="p-2 bg-white/5 hover:bg-red-500/15 border border-white/10 hover:border-red-500/30 text-zinc-400 hover:text-red-400 rounded-xl transition-all"
+                                    title="Disconnetti account"
+                                >
+                                    🚪
+                                </button>
                             </div>
                         )}
                     </div>
@@ -690,15 +791,12 @@ export default function Dashboard() {
                                                         : 'Tutto in regola ✅'}
                                                 </span>
                                             </div>
-                                            {userRole !== 'admin' && (
-                                                <button
-                                                    onClick={sendWhatsAppAdminReminder}
-                                                    className="p-2 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366] hover:text-black rounded-xl transition-all text-xs font-bold flex items-center gap-1 border border-[#25D366]/30"
-                                                    title="Invia promemoria rinnovo all'amministratore"
-                                                >
-                                                    <span>💬</span> Sollecita Admin
-                                                </button>
-                                            )}
+                                            <button
+                                                onClick={() => setShowPaymentCardsModal(true)}
+                                                className="p-2 bg-green-500/10 hover:bg-green-500 hover:text-black text-green-400 rounded-xl transition-all text-xs font-bold flex items-center gap-1 border border-green-500/30"
+                                            >
+                                                <span>💳</span> Coordinate
+                                            </button>
                                         </div>
 
                                         {/* FORM REGISTRAZIONE PAGAMENTO */}
@@ -851,91 +949,137 @@ export default function Dashboard() {
                                 </div>
                             </div>
 
-                            {/* SEZIONE 2: WIDGET RISPARMIO COLLETTIVO + PLAYLIST DEL GRUPPO */}
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+                            {/* SEZIONE 2: WIDGET RISPARMIO + PLAYLIST HUB + INDIRIZZO CONDIVISO */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
                                 {/* CARD RISPARMIO COLLETTIVO */}
-                                <div className="bg-gradient-to-br from-green-950/20 via-white/5 to-white/5 backdrop-blur-xl border border-green-500/20 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden ring-1 ring-green-500/20">
-                                    <div className="absolute top-0 right-0 w-36 h-36 bg-green-500/10 blur-2xl rounded-full pointer-events-none"></div>
-
-                                    <div className="flex justify-between items-start mb-6">
-                                        <div>
-                                            <span className="text-[10px] uppercase tracking-widest font-black text-green-400 bg-green-500/15 border border-green-500/30 px-3 py-1 rounded-full inline-block mb-2">
-                                                💰 Risparmio Attivo: -{savingsPercent}%
-                                            </span>
-                                            <h3 className="text-xl font-extrabold text-zinc-100 tracking-tight">
-                                                Impatto Economico Gruppo
-                                            </h3>
-                                        </div>
-                                        <span className="text-3xl">🎉</span>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4 mb-6">
-                                        <div className="bg-black/40 border border-white/10 rounded-2xl p-4">
-                                            <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold mb-1">Il tuo risparmio / mese</p>
-                                            <p className="text-2xl font-black text-green-400">~€{personalMonthlySavings.toFixed(2)}</p>
-                                            <p className="text-[11px] text-zinc-400 mt-1">vs €{individualSpotifyPrice}/m Spotify Singolo</p>
-                                        </div>
-                                        <div className="bg-black/40 border border-white/10 rounded-2xl p-4">
-                                            <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold mb-1">Il tuo risparmio / anno</p>
-                                            <p className="text-2xl font-black text-zinc-100">~€{personalAnnualSavings.toFixed(2)}</p>
-                                            <p className="text-[11px] text-zinc-400 mt-1">in tasca ogni anno</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-2xl flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-2xl">⚡</span>
+                                <div className="bg-gradient-to-br from-green-950/20 via-white/5 to-white/5 backdrop-blur-xl border border-green-500/20 rounded-3xl p-6 sm:p-7 shadow-2xl relative overflow-hidden ring-1 ring-green-500/20 flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex justify-between items-start mb-4">
                                             <div>
-                                                <p className="text-xs font-bold text-zinc-200">Risparmio collettivo totale annuo del gruppo:</p>
-                                                <p className="text-lg font-black text-green-400">Oltre €{groupAnnualSavings.toFixed(2)} risparmiati!</p>
+                                                <span className="text-[9px] uppercase tracking-widest font-black text-green-400 bg-green-500/15 border border-green-500/30 px-2.5 py-0.5 rounded-full inline-block mb-1.5">
+                                                    💰 -{savingsPercent}% Risparmio
+                                                </span>
+                                                <h3 className="text-lg font-extrabold text-zinc-100 tracking-tight">
+                                                    Risparmio di Gruppo
+                                                </h3>
+                                            </div>
+                                            <span className="text-2xl">🎉</span>
+                                        </div>
+
+                                        <div className="space-y-3 mb-4">
+                                            <div className="bg-black/40 border border-white/10 rounded-2xl p-3">
+                                                <p className="text-[9px] uppercase tracking-widest text-zinc-400 font-bold">Il tuo risparmio / mese</p>
+                                                <p className="text-xl font-black text-green-400">~€{personalMonthlySavings.toFixed(2)}</p>
+                                            </div>
+                                            <div className="bg-black/40 border border-white/10 rounded-2xl p-3">
+                                                <p className="text-[9px] uppercase tracking-widest text-zinc-400 font-bold">Il tuo risparmio / anno</p>
+                                                <p className="text-xl font-black text-zinc-100">~€{personalAnnualSavings.toFixed(2)}</p>
                                             </div>
                                         </div>
                                     </div>
+
+                                    <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-2xl">
+                                        <p className="text-[10px] text-zinc-300 font-medium">Risparmio annuo collettivo:</p>
+                                        <p className="text-sm font-black text-green-400">Oltre €{groupAnnualSavings.toFixed(2)}/anno!</p>
+                                    </div>
+                                </div>
+
+                                {/* CARD INDIRIZZO SPOTIFY FAMILY CONDIVISO */}
+                                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-7 shadow-2xl ring-1 ring-white/5 flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex justify-between items-center mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xl">📍</span>
+                                                <h3 className="text-lg font-extrabold text-zinc-100 tracking-tight">
+                                                    Indirizzo Family
+                                                </h3>
+                                            </div>
+                                            {userRole === 'admin' && (
+                                                <button
+                                                    onClick={() => {
+                                                        setIsEditingAddress(!isEditingAddress)
+                                                        if (!isEditingAddress) setAddressInput(familyAddress)
+                                                    }}
+                                                    className="text-[10px] text-green-400 hover:text-green-300 font-bold bg-white/5 border border-white/10 px-2.5 py-1 rounded-full"
+                                                >
+                                                    {isEditingAddress ? 'Annulla' : 'Modifica'}
+                                                </button>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
+                                            Spotify richiede lo stesso indirizzo per tutti i membri del gruppo Family.
+                                        </p>
+
+                                        {isEditingAddress ? (
+                                            <div className="space-y-3 mb-4">
+                                                <input
+                                                    type="text"
+                                                    value={addressInput}
+                                                    onChange={(e) => setAddressInput(e.target.value)}
+                                                    className="w-full bg-black/40 border border-white/10 text-xs text-zinc-100 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50"
+                                                    placeholder="es. Via Roma 1, 00100 Roma (RM)"
+                                                />
+                                                <button
+                                                    onClick={saveAddressSettings}
+                                                    className="w-full bg-green-500 text-black font-bold py-2 rounded-xl hover:bg-green-400 text-xs transition-all"
+                                                >
+                                                    Salva Indirizzo
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="p-3.5 bg-black/40 border border-white/10 rounded-2xl mb-4">
+                                                <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Indirizzo Registrato:</p>
+                                                <p className="text-sm font-bold text-zinc-100 select-all">{familyAddress}</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        onClick={() => copyToClipboard(familyAddress, 'Indirizzo')}
+                                        className="w-full bg-white/5 hover:bg-white/10 border border-white/15 text-zinc-200 hover:text-white font-bold py-2.5 rounded-xl transition-all text-xs flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
+                                    >
+                                        <span>📋</span> Copia Indirizzo per Spotify
+                                    </button>
                                 </div>
 
                                 {/* CARD PLAYLIST CONDIVISA DEL GRUPPO (SPOTIFY EMBED HUB) */}
-                                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl ring-1 ring-white/5 flex flex-col justify-between">
+                                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 sm:p-7 shadow-2xl ring-1 ring-white/5 flex flex-col justify-between">
                                     <div>
-                                        <div className="flex justify-between items-center mb-4">
+                                        <div className="flex justify-between items-center mb-3">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xl">🎵</span>
                                                 <h3 className="text-lg font-extrabold text-zinc-100 tracking-tight">
-                                                    Hub Playlist Condivisa
+                                                    Playlist Gruppo
                                                 </h3>
                                             </div>
                                             <button
                                                 onClick={() => setIsEditingPlaylist(!isEditingPlaylist)}
-                                                className="text-xs text-green-400 hover:text-green-300 font-bold transition-colors bg-white/5 border border-white/10 px-3 py-1.5 rounded-full"
+                                                className="text-[10px] text-green-400 hover:text-green-300 font-bold transition-colors bg-white/5 border border-white/10 px-2.5 py-1 rounded-full"
                                             >
-                                                {isEditingPlaylist ? 'Chiudi' : '⚙️ Cambia Link'}
+                                                {isEditingPlaylist ? 'Chiudi' : '⚙️ Link'}
                                             </button>
                                         </div>
 
                                         {isEditingPlaylist && (
-                                            <div className="mb-4 p-4 bg-black/50 border border-white/10 rounded-2xl animate-in fade-in duration-200">
-                                                <label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 mb-2 block">
-                                                    Incolla URL Playlist / Album Spotify:
-                                                </label>
+                                            <div className="mb-3 p-3 bg-black/50 border border-white/10 rounded-2xl">
                                                 <div className="flex gap-2">
                                                     <input
                                                         type="text"
-                                                        placeholder="https://open.spotify.com/playlist/..."
+                                                        placeholder="URL playlist Spotify"
                                                         value={customPlaylistInput}
                                                         onChange={(e) => setCustomPlaylistInput(e.target.value)}
-                                                        className="flex-grow bg-white/5 border border-white/10 text-xs text-zinc-100 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-green-500/50"
+                                                        className="flex-grow bg-white/5 border border-white/10 text-[11px] text-zinc-100 rounded-xl px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-green-500/50"
                                                     />
                                                     <button
                                                         onClick={() => saveCustomPlaylist()}
-                                                        className="bg-green-500 text-black text-xs font-bold px-4 py-2 rounded-xl hover:bg-green-400 transition-all shrink-0"
+                                                        className="bg-green-500 text-black text-[11px] font-bold px-3 py-1.5 rounded-xl hover:bg-green-400 transition-all shrink-0"
                                                     >
                                                         Salva
                                                     </button>
                                                 </div>
-                                                {/* PRESET RAPIDI */}
-                                                <div className="flex gap-2 mt-3 flex-wrap">
-                                                    <button onClick={() => saveCustomPlaylist('https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M')} className="text-[10px] bg-white/5 hover:bg-white/10 text-zinc-300 px-2.5 py-1 rounded-lg border border-white/5">🔥 Top Hits</button>
-                                                    <button onClick={() => saveCustomPlaylist('https://open.spotify.com/playlist/37i9dQZF1DX4WYpdgoIcn6')} className="text-[10px] bg-white/5 hover:bg-white/10 text-zinc-300 px-2.5 py-1 rounded-lg border border-white/5">☕ Chill Vibes</button>
-                                                    <button onClick={() => saveCustomPlaylist('https://open.spotify.com/playlist/37i9dQZF1DXa2PvU927x81')} className="text-[10px] bg-white/5 hover:bg-white/10 text-zinc-300 px-2.5 py-1 rounded-lg border border-white/5">🚗 Road Trip</button>
+                                                <div className="flex gap-1.5 mt-2 flex-wrap">
+                                                    <button onClick={() => saveCustomPlaylist('https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M')} className="text-[9px] bg-white/5 hover:bg-white/10 text-zinc-300 px-2 py-0.5 rounded border border-white/5">Top Hits</button>
+                                                    <button onClick={() => saveCustomPlaylist('https://open.spotify.com/playlist/37i9dQZF1DX4WYpdgoIcn6')} className="text-[9px] bg-white/5 hover:bg-white/10 text-zinc-300 px-2 py-0.5 rounded border border-white/5">Chill</button>
                                                 </div>
                                             </div>
                                         )}
@@ -952,8 +1096,8 @@ export default function Dashboard() {
                                             ></iframe>
                                         </div>
                                     </div>
-                                    <p className="text-[10px] text-zinc-500 text-center mt-3">
-                                        Ascolta e condividi la musica direttamente con i membri del gruppo.
+                                    <p className="text-[9px] text-zinc-500 text-center mt-2">
+                                        Player integrato SpotiShare
                                     </p>
                                 </div>
                             </div>
@@ -965,12 +1109,20 @@ export default function Dashboard() {
                                         <h3 className="text-xl font-extrabold text-zinc-100 flex items-center gap-2">
                                             <span>📜</span> Storico dei Tuoi Pagamenti
                                         </h3>
-                                        <button
-                                            onClick={exportPaymentsCSV}
-                                            className="inline-flex items-center gap-2 bg-white/5 border border-white/15 hover:border-green-500/50 hover:bg-green-500/10 text-zinc-200 hover:text-green-400 text-xs font-bold px-4 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
-                                        >
-                                            <span>📥</span> Esporta Report CSV
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setShowPaymentCardsModal(true)}
+                                                className="inline-flex items-center gap-1.5 bg-green-500/10 border border-green-500/30 text-green-400 text-xs font-bold px-3.5 py-2 rounded-xl hover:bg-green-500 hover:text-black transition-all"
+                                            >
+                                                <span>💳</span> Coordinate per Saldo
+                                            </button>
+                                            <button
+                                                onClick={exportPaymentsCSV}
+                                                className="inline-flex items-center gap-1.5 bg-white/5 border border-white/15 hover:border-green-500/50 hover:bg-green-500/10 text-zinc-200 hover:text-green-400 text-xs font-bold px-3.5 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
+                                            >
+                                                <span>📥</span> Esporta CSV
+                                            </button>
+                                        </div>
                                     </div>
                                     {payments.length > 0 ? (
                                         <ul className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
@@ -1003,6 +1155,12 @@ export default function Dashboard() {
                                             <span className="p-2.5 bg-red-500/20 rounded-2xl border border-red-500/30">🛡️</span> Pannello Amministratore
                                         </h2>
                                         <div className="flex items-center gap-3 flex-wrap">
+                                            <button
+                                                onClick={() => setShowPaymentCardsModal(true)}
+                                                className="inline-flex items-center gap-1.5 bg-green-500/10 border border-green-500/30 hover:bg-green-500 hover:text-black text-green-400 text-xs font-bold px-4 py-2.5 rounded-2xl transition-all active:scale-95 shadow-md"
+                                            >
+                                                <span>💳</span> Gestisci Carte / IBAN
+                                            </button>
                                             <button
                                                 onClick={exportPaymentsCSV}
                                                 className="inline-flex items-center gap-2 bg-white/5 border border-white/15 hover:border-green-500/50 hover:bg-green-500/10 text-zinc-200 hover:text-green-400 text-xs font-bold px-4 py-2.5 rounded-2xl transition-all active:scale-95 shadow-lg"
@@ -1053,8 +1211,8 @@ export default function Dashboard() {
 
                                             {/* REGISTRAZIONE INCASSO MANUALE CONTANTI */}
                                             <div className="mt-8 pt-6 border-t border-white/10">
-                                                <h3 className="font-extrabold text-base mb-1 text-zinc-100">Registra Incasso Manuale (Contanti)</h3>
-                                                <p className="text-xs text-zinc-400 mb-4 leading-relaxed">Segna i pagamenti ricevuti a mano per il mese selezionato ({mesi[selectedTargetMonth]} {selectedTargetYear}).</p>
+                                                <h3 className="font-extrabold text-base mb-1 text-zinc-100">Registra Incasso Manuale (Contanti / Bonifico)</h3>
+                                                <p className="text-xs text-zinc-400 mb-4 leading-relaxed">Segna i pagamenti ricevuti per il mese selezionato ({mesi[selectedTargetMonth]} {selectedTargetYear}).</p>
                                                 <ul className="space-y-2.5">
                                                     {members.map(member => {
                                                         const memberDebt = calculateUserDebt(member.id, allGroupPayments)
@@ -1177,6 +1335,176 @@ export default function Dashboard() {
                 </main>
             </div>
 
+            {/* MODALE DELLE COORDINATE CARTE & BONIFICI (REVOLUT, BUDDYBANK, POSTEPAY, BPER) */}
+            {showPaymentCardsModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150 overflow-y-auto">
+                    <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl max-w-xl w-full relative overflow-hidden my-8">
+                        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-[#1ed760]"></div>
+
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h3 className="text-xl font-extrabold text-zinc-100 flex items-center gap-2">
+                                    <span>💳</span> Coordinate di Pagamento
+                                </h3>
+                                <p className="text-xs text-zinc-400 mt-1">
+                                    Copia i dati con 1-click per effettuare il bonifico o la ricarica verso l&apos;amministratore.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowPaymentCardsModal(false)}
+                                className="text-zinc-400 hover:text-white p-2 rounded-full hover:bg-white/10 text-sm"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {userRole === 'admin' && (
+                            <div className="flex justify-end mb-4">
+                                <button
+                                    onClick={() => setIsEditingCards(!isEditingCards)}
+                                    className="text-xs text-green-400 hover:text-green-300 font-bold bg-white/5 border border-white/10 px-3 py-1.5 rounded-full"
+                                >
+                                    {isEditingCards ? 'Annulla Modifica' : '⚙️ Modifica Coordinate Carte'}
+                                </button>
+                            </div>
+                        )}
+
+                        {isEditingCards ? (
+                            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                                <div>
+                                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Intestatario</label>
+                                    <input type="text" value={cardDetails.holderName} onChange={e => setCardDetails({ ...cardDetails, holderName: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Revolut Tag</label>
+                                        <input type="text" value={cardDetails.revolutTag} onChange={e => setCardDetails({ ...cardDetails, revolutTag: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Revolut IBAN</label>
+                                        <input type="text" value={cardDetails.revolutIban} onChange={e => setCardDetails({ ...cardDetails, revolutIban: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Buddybank IBAN</label>
+                                    <input type="text" value={cardDetails.buddybankIban} onChange={e => setCardDetails({ ...cardDetails, buddybankIban: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Postepay Numero Carta (senza IBAN)</label>
+                                        <input type="text" value={cardDetails.postepayCardNumber} onChange={e => setCardDetails({ ...cardDetails, postepayCardNumber: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Postepay Codice Fiscale</label>
+                                        <input type="text" value={cardDetails.postepayFiscalCode} onChange={e => setCardDetails({ ...cardDetails, postepayFiscalCode: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">BPER Banca IBAN</label>
+                                    <input type="text" value={cardDetails.bperIban} onChange={e => setCardDetails({ ...cardDetails, bperIban: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                </div>
+                                <button onClick={saveCardsSettings} className="w-full bg-green-500 text-black font-bold py-3 rounded-xl hover:bg-green-400 transition-all text-xs">
+                                    Salva Coordinate
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
+                                {/* CARD 1: REVOLUT */}
+                                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl hover:border-cyan-500/40 transition-all">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+                                            <span className="font-extrabold text-sm text-zinc-100">Revolut</span>
+                                        </div>
+                                        <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md font-bold">Istantaneo / Bonifico</span>
+                                    </div>
+                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails.holderName}</strong></p>
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
+                                            <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.revolutTag}</span>
+                                            <button onClick={() => copyToClipboard(cardDetails.revolutTag, 'Revtag')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia Tag</button>
+                                        </div>
+                                        <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
+                                            <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.revolutIban}</span>
+                                            <button onClick={() => copyToClipboard(cardDetails.revolutIban, 'IBAN Revolut')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia IBAN</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* CARD 2: BUDDYBANK */}
+                                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl hover:border-zinc-400/40 transition-all">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-zinc-100"></span>
+                                            <span className="font-extrabold text-sm text-zinc-100">Buddybank (UniCredit)</span>
+                                        </div>
+                                        <span className="text-[10px] text-zinc-300 bg-white/10 px-2 py-0.5 rounded-md font-bold">Bonifico SEPA</span>
+                                    </div>
+                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails.holderName}</strong></p>
+                                    <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
+                                        <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.buddybankIban}</span>
+                                        <button onClick={() => copyToClipboard(cardDetails.buddybankIban, 'IBAN Buddybank')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia IBAN</button>
+                                    </div>
+                                </div>
+
+                                {/* CARD 3: POSTEPAY (SENZA IBAN) */}
+                                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl hover:border-yellow-500/40 transition-all">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
+                                            <span className="font-extrabold text-sm text-zinc-100">Postepay (senza IBAN)</span>
+                                        </div>
+                                        <span className="text-[10px] text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-md font-bold">Ricarica Carta P2P</span>
+                                    </div>
+                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails.holderName}</strong></p>
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
+                                            <div>
+                                                <span className="text-[9px] uppercase tracking-widest text-zinc-500 block">Numero Carta:</span>
+                                                <span className="text-xs font-mono font-bold text-zinc-100">{cardDetails.postepayCardNumber}</span>
+                                            </div>
+                                            <button onClick={() => copyToClipboard(cardDetails.postepayCardNumber.replace(/\s+/g, ''), 'Numero Postepay')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia Carta</button>
+                                        </div>
+                                        <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
+                                            <div>
+                                                <span className="text-[9px] uppercase tracking-widest text-zinc-500 block">Codice Fiscale:</span>
+                                                <span className="text-xs font-mono font-bold text-zinc-100">{cardDetails.postepayFiscalCode}</span>
+                                            </div>
+                                            <button onClick={() => copyToClipboard(cardDetails.postepayFiscalCode, 'Codice Fiscale')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia C.F.</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* CARD 4: BPER BANCA */}
+                                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl hover:border-emerald-500/40 transition-all">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                                            <span className="font-extrabold text-sm text-zinc-100">BPER Banca</span>
+                                        </div>
+                                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md font-bold">Bonifico Bancario</span>
+                                    </div>
+                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails.holderName}</strong></p>
+                                    <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
+                                        <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.bperIban}</span>
+                                        <button onClick={() => copyToClipboard(cardDetails.bperIban, 'IBAN BPER')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1 rounded-lg transition-all ml-2 shrink-0">Copia IBAN</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
+                            <button
+                                onClick={() => setShowPaymentCardsModal(false)}
+                                className="w-full sm:w-auto px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all"
+                            >
+                                Chiudi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* MODALE DI CONFERMA UNIVERSALE */}
             {confirmModal && confirmModal.isOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150">
@@ -1184,7 +1512,8 @@ export default function Dashboard() {
                         <div className={`absolute top-0 left-0 right-0 h-1.5 ${
                             confirmModal.title.toLowerCase().includes('rimuovi') ||
                             confirmModal.title.toLowerCase().includes('annulla') ||
-                            confirmModal.title.toLowerCase().includes('elimina')
+                            confirmModal.title.toLowerCase().includes('elimina') ||
+                            confirmModal.title.toLowerCase().includes('disconnetti')
                                 ? 'bg-gradient-to-r from-red-500 to-rose-600'
                                 : 'bg-gradient-to-r from-[#1DB954] to-[#1ed760]'
                         }`}></div>
@@ -1208,7 +1537,8 @@ export default function Dashboard() {
                                 className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 ${
                                     confirmModal.title.toLowerCase().includes('rimuovi') ||
                                     confirmModal.title.toLowerCase().includes('annulla') ||
-                                    confirmModal.title.toLowerCase().includes('elimina')
+                                    confirmModal.title.toLowerCase().includes('elimina') ||
+                                    confirmModal.title.toLowerCase().includes('disconnetti')
                                         ? 'bg-red-500 hover:bg-red-400 text-white shadow-red-500/20'
                                         : 'bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black shadow-green-500/20 hover:scale-[1.02]'
                                 }`}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import confetti from 'canvas-confetti';
 import { supabase } from '@/utils/supabase';
 import { useToast } from '@/components/ToastContext';
 
@@ -11,6 +12,20 @@ export default function JoinPlanPage() {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'checking' | 'valid' | 'invalid' | 'full'>('checking');
+  const [planName, setPlanName] = useState<string>('');
+
+  const triggerCelebration = () => {
+    try {
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#1DB954', '#1ed760', '#ffffff', '#22e569', '#FFD700']
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
     async function handleJoin() {
@@ -22,7 +37,6 @@ export default function JoinPlanPage() {
       }
 
       try {
-        console.log('Checking invite code:', code);
         // 1. Verify the invite code exists and get plan details
         const { data: plan, error: planError } = await supabase
           .from('plans')
@@ -37,6 +51,8 @@ export default function JoinPlanPage() {
           return;
         }
 
+        setPlanName(plan.name);
+
         // 2. Check if the plan is full
         const { count: memberCount, error: countError } = await supabase
           .from('users')
@@ -45,7 +61,7 @@ export default function JoinPlanPage() {
 
         if (countError) throw countError;
 
-        if (memberCount && memberCount >= plan.max_members) {
+        if (memberCount !== null && memberCount >= plan.max_members) {
           setStatus('full');
           setLoading(false);
           return;
@@ -54,8 +70,8 @@ export default function JoinPlanPage() {
         // 3. Get current user
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
-          showToast("Devi effettuare l'accesso per unirti a un gruppo", "error");
-          router.push('/login');
+          showToast("Effettua l'accesso con Spotify per unirti al gruppo", "info");
+          router.push(`/login?redirect=/join/${code}`);
           return;
         }
 
@@ -68,12 +84,13 @@ export default function JoinPlanPage() {
         if (joinError) throw joinError;
 
         setStatus('valid');
-        showToast(`Benvenuto nel gruppo ${plan.name}!`, "success");
+        triggerCelebration();
+        showToast(`Benvenuto nel gruppo ${plan.name}! 🎉`, "success");
 
         // Redirect to dashboard after a short delay
         setTimeout(() => {
           router.push('/dashboard');
-        }, 2000);
+        }, 1800);
 
       } catch (error: any) {
         console.error("Join error:", error);
@@ -87,50 +104,81 @@ export default function JoinPlanPage() {
     handleJoin();
   }, [params.code, router, showToast]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#121212] text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-[#1DB954] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="animate-pulse">Verifica invito in corso...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#121212] text-white flex items-center justify-center p-4">
-      <div className="bg-[#181818] p-8 rounded-2xl border border-[#282828] shadow-2xl max-w-md w-full text-center">
-        {status === 'valid' && (
-          <>
-            <div className="text-6xl mb-4">🎉</div>
-            <h1 className="text-2xl font-bold mb-2">Unione Riuscita!</h1>
-            <p className="text-[#B3B3B3] mb-6">Sei stato aggiunto al gruppo. Verrai reindirizzato alla dashboard...</p>
-          </>
+    <div className="relative flex min-h-screen items-center justify-center bg-[#0B0B0F] p-4 text-zinc-100 overflow-hidden font-sans">
+      {/* Sfondi con bagliori ambientali */}
+      <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] bg-green-500/10 blur-[130px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] bg-indigo-500/10 blur-[130px] rounded-full pointer-events-none" />
+
+      <div className="relative z-10 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-8 sm:p-10 max-w-md w-full text-center ring-1 ring-white/5">
+        <div className="flex justify-center mb-6">
+          <img src="/icon.svg" alt="SpotiShare Logo" className="w-16 h-16 drop-shadow-[0_0_20px_rgba(29,185,84,0.5)]" />
+        </div>
+
+        {loading && (
+          <div className="py-8">
+            <div className="w-12 h-12 border-4 border-[#1DB954] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <h2 className="text-xl font-bold text-zinc-100 mb-1">Verifica Invito</h2>
+            <p className="text-xs text-zinc-400 animate-pulse">Sincronizzazione con il gruppo Spotify...</p>
+          </div>
         )}
 
-        {status === 'invalid' && (
-          <>
-            <div className="text-6xl mb-4">❌</div>
-            <h1 className="text-2xl font-bold mb-2">Codice Non Valido</h1>
-            <p className="text-[#B3B3B3] mb-6">Il codice d'invito inserito non esiste o è scaduto.</p>
-          </>
+        {!loading && status === 'valid' && (
+          <div className="py-4 animate-in zoom-in-95 duration-200">
+            <div className="text-5xl mb-4">🎉</div>
+            <h1 className="text-2xl font-black text-zinc-100 mb-2">Unione Riuscita!</h1>
+            <p className="text-sm text-zinc-300 mb-2">
+              Sei ora membro del gruppo <span className="text-green-400 font-bold">{planName}</span>.
+            </p>
+            <p className="text-xs text-zinc-500 mb-6">Reindirizzamento alla tua Dashboard in corso...</p>
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="w-full bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black font-extrabold py-3.5 rounded-2xl shadow-lg hover:scale-[1.02] transition-all text-sm uppercase"
+            >
+              Vai alla Dashboard 🚀
+            </button>
+          </div>
         )}
 
-        {status === 'full' && (
-          <>
-            <div className="text-6xl mb-4">🚫</div>
-            <h1 className="text-2xl font-bold mb-2">Gruppo Pieno</h1>
-            <p className="text-[#B3B3B3] mb-6">Spiacenti, questo gruppo ha già raggiunto il numero massimo di membri.</p>
-          </>
+        {!loading && status === 'invalid' && (
+          <div className="py-4 animate-in zoom-in-95 duration-200">
+            <div className="text-5xl mb-4">❌</div>
+            <h1 className="text-2xl font-black text-zinc-100 mb-2">Codice Non Valido</h1>
+            <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+              Il codice d&apos;invito inserito non esiste o non è più attivo. Chiedi un nuovo codice all&apos;amministratore.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => router.push('/join')}
+                className="w-full bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black font-bold py-3.5 rounded-2xl hover:scale-[1.02] transition-all text-sm"
+              >
+                Inserisci un altro codice
+              </button>
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="w-full bg-white/5 border border-white/10 text-zinc-300 font-bold py-3 rounded-2xl hover:bg-white/10 transition-all text-xs"
+              >
+                Torna alla Dashboard
+              </button>
+            </div>
+          </div>
         )}
 
-        <button
-          onClick={() => router.push('/login')}
-          className="w-full bg-[#1DB954] text-black font-bold py-3 rounded-xl hover:scale-[1.02] transition-transform"
-        >
-          Torna all'accesso
-        </button>
+        {!loading && status === 'full' && (
+          <div className="py-4 animate-in zoom-in-95 duration-200">
+            <div className="text-5xl mb-4">🚫</div>
+            <h1 className="text-2xl font-black text-zinc-100 mb-2">Gruppo al Completo</h1>
+            <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+              Questo gruppo ha già raggiunto il numero massimo di partecipanti consentiti dal piano Spotify Family.
+            </p>
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="w-full bg-white/5 border border-white/10 text-zinc-100 font-bold py-3.5 rounded-2xl hover:bg-white/10 transition-all text-sm"
+            >
+              Torna alla Dashboard
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
