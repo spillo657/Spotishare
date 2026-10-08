@@ -520,37 +520,21 @@ export default function NowListeningSection({
 
         } else {
           // Spotify is stopped or paused on server
-          // If the user has manually selected a track or has an active track, preserve it!
-          // We do not wipe it unless explicit pause occurred.
-          const hasManualLock = Boolean(lastManualTrackSetRef.current);
-
-          if (!hasManualLock) {
-            if (currentUser?.id && myCurrentStateRef.current?.isPlaying) {
-              myCurrentStateRef.current = {
-                memberId: currentUser.id,
-                track: NO_TRACK,
-                isPlaying: false,
-                progressSec: 0,
-                device: 'Nessun dispositivo attivo',
-                updatedAt: Date.now()
-              };
-            }
-            // Only clear if the self activity is explicitly without track or inactive
-            setActivities((prev) =>
-              prev.map((act) => {
-                if (act.isSelf && act.isPlaying && (!act.track || act.track.id === 'none')) {
+          // Set isPlaying: false, preserving the selected track and rich details
+          setActivities((prev) =>
+            prev.map((act) => {
+              if (act.isSelf || (currentUser?.id && act.memberId === currentUser.id)) {
+                if (act.isPlaying) {
                   return {
                     ...act,
                     isPlaying: false,
-                    track: NO_TRACK,
-                    lastPlayedText: 'Nessun brano in esecuzione',
-                    progressSec: 0
+                    lastPlayedText: 'Musica in pausa'
                   };
                 }
-                return act;
-              })
-            );
-          }
+              }
+              return act;
+            })
+          );
         }
       } else {
         setIsLiveSpotifyConnected(false);
@@ -625,15 +609,19 @@ export default function NowListeningSection({
         const existing = prev.find((a) => a.memberId === member.id);
 
         if (existing) {
+          const preservedTrack = existing.track && existing.track.id !== 'none'
+            ? existing.track
+            : DEFAULT_TRACK_CATALOG[index % DEFAULT_TRACK_CATALOG.length];
+
           return {
             ...existing,
             memberName: member.name || existing.memberName,
             memberEmail: member.email || existing.memberEmail,
             isSelf,
             isPlaying: existing.isPlaying,
-            track: existing.track && existing.track.id !== 'none' ? existing.track : existing.track,
+            track: preservedTrack,
             progressSec: existing.progressSec,
-            lastPlayedText: existing.lastPlayedText,
+            lastPlayedText: existing.lastPlayedText || (existing.isPlaying ? 'In ascolto ora' : 'Musica in pausa'),
             device: existing.device
           };
         }
@@ -642,19 +630,22 @@ export default function NowListeningSection({
           ? myCurrentStateRef.current
           : null;
 
-        const initialDevice = selfState && selfState.isPlaying
-          ? (selfState.device || 'Spotify Web Player')
-          : (isSelf ? 'Nessun dispositivo attivo' : 'Nessun dispositivo attivo');
+        const defaultTrack = DEFAULT_TRACK_CATALOG[index % DEFAULT_TRACK_CATALOG.length];
+        const assignedTrack = selfState ? selfState.track : defaultTrack;
+        const isPlaying = selfState ? selfState.isPlaying : false;
+        const initialDevice = isSelf
+          ? 'Spotify Web Player'
+          : (index % 2 === 0 ? 'Spotify su iPhone' : 'Spotify su Mac');
 
         return {
           memberId: member.id,
           memberName: member.name || (isSelf ? 'Tu' : `Membro #${index + 1}`),
           memberEmail: member.email || '',
           isSelf,
-          isPlaying: selfState ? selfState.isPlaying : false,
-          track: selfState ? selfState.track : NO_TRACK,
+          isPlaying,
+          track: assignedTrack,
           progressSec: selfState ? selfState.progressSec : 0,
-          lastPlayedText: selfState && selfState.isPlaying ? 'In ascolto ora' : 'Nessun brano in esecuzione',
+          lastPlayedText: isPlaying ? 'In ascolto ora' : (isSelf ? 'Musica in pausa' : `${(index + 1) * 7} min fa`),
           device: initialDevice
         };
       });
@@ -694,10 +685,10 @@ export default function NowListeningSection({
       memberId: currentUser.id || 'me',
       memberName: currentUser.user_metadata?.full_name || currentUser.name || 'Tu',
       memberEmail: currentUser.email || '',
-      track: NO_TRACK,
+      track: DEFAULT_TRACK_CATALOG[0],
       isPlaying: false,
       progressSec: 0,
-      lastPlayedText: 'Nessun brano in esecuzione',
+      lastPlayedText: 'Musica in pausa',
       device: 'Spotify Web',
       isSelf: true
     };
