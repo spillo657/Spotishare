@@ -1573,7 +1573,7 @@ export default function NowListeningSection({
               <div className="flex justify-between items-start gap-3">
                 <div className="min-w-0">
                   <h3 id="song-picker-modal-title" className="text-lg sm:text-xl font-extrabold text-zinc-100 flex items-center gap-2 truncate">
-                    <span>🎧</span> I tuoi brani e catalogo Spotify
+                    <span>🎵</span> Scegli Brano - Catalogo SpotiShare
                   </h3>
                   <p className="text-xs text-zinc-400 mt-0.5 truncate">
                     Scegli un brano da ascoltare o imposta il tuo stato SpotiShare.
