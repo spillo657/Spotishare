@@ -211,8 +211,16 @@ export default function NowListeningSection({
   const audioContextRef = useRef<AudioContext | null>(null);
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Storage key bumped to v11 to ensure completely clean slate
-  const storageKey = `spotishare_listening_v11_${planId || 'default'}`;
+  // Supabase Realtime Channel & State Refs for instant multi-user synchronization
+  const channelRef = useRef<any>(null);
+  const myCurrentStateRef = useRef<{
+    memberId: string;
+    track: TrackData;
+    isPlaying: boolean;
+    progressSec: number;
+    device: string;
+    updatedAt: number;
+  } | null>(null);
 
   // Helper to determine if a member is the current user
   const checkIsSelf = useCallback((member: Member, index: number): boolean => {
@@ -222,6 +230,137 @@ export default function NowListeningSection({
     if (index === 0 && !currentUser) return true;
     return false;
   }, [currentUser]);
+
+  // Broadcast helper to publish local changes to the entire group in real-time
+  const broadcastMyState = useCallback(
+    (track: TrackData, isPlaying: boolean, progressSec: number = 0, device: string = 'Spotify Web') => {
+      if (!currentUser?.id) return;
+
+      const payload = {
+        memberId: currentUser.id,
+        track,
+        isPlaying,
+        progressSec,
+        device,
+        updatedAt: Date.now()
+      };
+      myCurrentStateRef.current = payload;
+
+      if (channelRef.current) {
+        channelRef.current
+          .send({
+            type: 'broadcast',
+            event: 'track_change',
+            payload
+          })
+          .catch((e: any) => console.warn('Broadcast send error:', e));
+
+        channelRef.current.track(payload).catch((e: any) => console.warn('Presence track error:', e));
+      }
+    },
+    [currentUser]
+  );
+
+  // Connect to Supabase Realtime Channel for the current plan
+  useEffect(() => {
+    if (!planId) return;
+
+    const channelName = `spotishare_plan_${planId}`;
+    const channel = supabase.channel(channelName, {
+      config: {
+        broadcast: { self: false },
+        presence: { key: currentUser?.id || `user_${Date.now()}` }
+      }
+    });
+
+    channel
+      .on('broadcast', { event: 'track_change' }, (response: any) => {
+        const data = response?.payload;
+        if (!data || !data.memberId) return;
+
+        setActivities((prev) =>
+          prev.map((act) => {
+            if (act.memberId === data.memberId) {
+              const isPlaying = Boolean(data.isPlaying) && data.track?.id !== 'none';
+              return {
+                ...act,
+                track: isPlaying && data.track ? data.track : NO_TRACK,
+                isPlaying,
+                progressSec: isPlaying ? data.progressSec || 0 : 0,
+                lastPlayedText: isPlaying ? 'In ascolto ora' : 'Nessun brano in esecuzione',
+                device: data.device || act.device
+              };
+            }
+            return act;
+          })
+        );
+      })
+      .on('broadcast', { event: 'request_state' }, () => {
+        // If another member requests current state, broadcast our current state
+        if (myCurrentStateRef.current && currentUser?.id) {
+          channel.send({
+            type: 'broadcast',
+            event: 'track_change',
+            payload: myCurrentStateRef.current
+          }).catch((e: any) => console.warn('State reply error:', e));
+        }
+      })
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        Object.values(state).forEach((presences: any) => {
+          if (Array.isArray(presences)) {
+            presences.forEach((p: any) => {
+              if (p && p.memberId && p.memberId !== currentUser?.id) {
+                setActivities((prev) =>
+                  prev.map((act) => {
+                    if (act.memberId === p.memberId) {
+                      const isPlaying = Boolean(p.isPlaying) && p.track?.id !== 'none';
+                      return {
+                        ...act,
+                        track: isPlaying && p.track ? p.track : NO_TRACK,
+                        isPlaying,
+                        progressSec: isPlaying ? p.progressSec || 0 : 0,
+                        lastPlayedText: isPlaying ? 'In ascolto ora' : 'Nessun brano in esecuzione',
+                        device: p.device || act.device
+                      };
+                    }
+                    return act;
+                  })
+                );
+              }
+            });
+          }
+        });
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          if (currentUser?.id) {
+            const initialState = myCurrentStateRef.current || {
+              memberId: currentUser.id,
+              track: NO_TRACK,
+              isPlaying: false,
+              progressSec: 0,
+              device: 'Spotify Web',
+              updatedAt: Date.now()
+            };
+            await channel.track(initialState).catch((e: any) => console.warn('Presence init error:', e));
+          }
+          // Request current state from other connected members in the room
+          channel.send({
+            type: 'broadcast',
+            event: 'request_state',
+            payload: { requestedBy: currentUser?.id }
+          }).catch((e: any) => console.warn('Request state error:', e));
+        }
+      });
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [planId, currentUser]);
 
   // Extract client Spotify token from Supabase session if present
   useEffect(() => {
@@ -256,7 +395,7 @@ export default function NowListeningSection({
     };
   }, []);
 
-  // Real-time Spotify API polling with high reactivity
+  // Real-time Spotify API polling with high reactivity & automatic group broadcast
   const pollServerSpotifyStatus = useCallback(async (isManual: boolean = false) => {
     if (isManual) setIsRefreshing(true);
     try {
@@ -297,6 +436,10 @@ export default function NowListeningSection({
               return act;
             })
           );
+
+          // Broadcast state to all other members (Admin included)
+          broadcastMyState(data.track, true, data.progressSec || 0, data.device || 'Spotify Device');
+
         } else {
           // Spotify is stopped or paused -> STRICTLY SET NO_TRACK
           setActivities((prev) =>
@@ -313,6 +456,10 @@ export default function NowListeningSection({
               return act;
             })
           );
+
+          if (myCurrentStateRef.current?.isPlaying) {
+            broadcastMyState(NO_TRACK, false, 0, 'Spotify');
+          }
         }
       } else {
         setIsLiveSpotifyConnected(false);
@@ -324,7 +471,7 @@ export default function NowListeningSection({
         setTimeout(() => setIsRefreshing(false), 400);
       }
     }
-  }, [clientSpotifyToken]);
+  }, [clientSpotifyToken, broadcastMyState]);
 
   // High-reactivity polling: every 2000ms + on window focus + on tab visibility change
   useEffect(() => {
@@ -483,6 +630,9 @@ export default function NowListeningSection({
       )
     );
 
+    // Broadcast sync state
+    broadcastMyState(targetMember.track, true, targetMember.progressSec, 'Spotify Group Session');
+
     const trackId = targetMember.track.spotifyUrl.includes('/track/')
       ? targetMember.track.spotifyUrl.split('/track/')[1].split('?')[0]
       : targetMember.track.id;
@@ -526,7 +676,7 @@ export default function NowListeningSection({
     setIsSyncingPlayer(false);
   };
 
-  // Pause playback: immediate optimistic update + API command + quick re-poll
+  // Pause playback: immediate optimistic update + API command + Realtime Broadcast
   const handlePauseMyPlayback = async () => {
     // Immediate UI feedback
     setActivities((prev) =>
@@ -544,6 +694,9 @@ export default function NowListeningSection({
       })
     );
     showToast('Nessun brano in riproduzione ⏸️', 'info');
+
+    // Broadcast paused state to Admin and all group members
+    broadcastMyState(NO_TRACK, false, 0, 'Spotify');
 
     try {
       const headers: Record<string, string> = {};
@@ -573,6 +726,7 @@ export default function NowListeningSection({
       })
     );
     showToast('Stato azzerato: Nessun brano in esecuzione ⏹️', 'info');
+    broadcastMyState(NO_TRACK, false, 0, 'Spotify');
     handlePauseMyPlayback();
   };
 
@@ -595,6 +749,9 @@ export default function NowListeningSection({
       })
     );
     showToast(`Riproduzione avviata: "${trackToPlay.title}" ▶️`, 'success');
+
+    // Broadcast to group
+    broadcastMyState(trackToPlay, true, 0, 'Spotify Web');
 
     const trackId = trackToPlay.spotifyUrl.includes('/track/')
       ? trackToPlay.spotifyUrl.split('/track/')[1].split('?')[0]
@@ -621,10 +778,16 @@ export default function NowListeningSection({
       prev.map((act) => {
         if (act.memberId === memberId) {
           const nextPlaying = !act.isPlaying;
+          const nextTrack = nextPlaying ? (act.track.id === 'none' ? DEFAULT_TRACK_CATALOG[0] : act.track) : NO_TRACK;
+
+          if (act.isSelf) {
+            broadcastMyState(nextTrack, nextPlaying, 0, 'Spotify');
+          }
+
           return {
             ...act,
             isPlaying: nextPlaying,
-            track: nextPlaying ? (act.track.id === 'none' ? DEFAULT_TRACK_CATALOG[0] : act.track) : NO_TRACK,
+            track: nextTrack,
             lastPlayedText: nextPlaying ? 'In ascolto ora' : 'Nessun brano in esecuzione'
           };
         }
@@ -705,7 +868,7 @@ export default function NowListeningSection({
     }
   };
 
-  // Change current user track from catalogue or recent tracks
+  // Change current user track from catalogue or recent tracks + Broadcast to room
   const handleSelectTrackForSelf = async (track: TrackData, makeActive: boolean = true) => {
     // 1. Optimistic UI update
     setActivities((prev) =>
@@ -723,6 +886,9 @@ export default function NowListeningSection({
       })
     );
 
+    // 2. Broadcast immediately to Admin and all group members
+    broadcastMyState(track, makeActive, 0, 'Spotify Web');
+
     setShowSongPickerModal(false);
     showToast(
       makeActive
@@ -732,7 +898,7 @@ export default function NowListeningSection({
     );
     if (onTriggerConfetti) onTriggerConfetti();
 
-    // 2. If makeActive, send Spotify play command
+    // 3. If makeActive, send Spotify play command
     if (makeActive) {
       const trackId = track.spotifyUrl.includes('/track/')
         ? track.spotifyUrl.split('/track/')[1].split('?')[0]
