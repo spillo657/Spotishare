@@ -222,6 +222,11 @@ export default function Dashboard() {
     }
 
     const saveCardsSettings = () => {
+        if (userRole !== 'admin') {
+            showToast("⚠️ Solo l'amministratore del gruppo può modificare le coordinate delle carte.", 'error')
+            setIsEditingCards(false)
+            return
+        }
         if (userPlanId && typeof window !== 'undefined') {
             localStorage.setItem(`spotishare_cards_${userPlanId}`, JSON.stringify(cardDetails))
         }
@@ -230,6 +235,11 @@ export default function Dashboard() {
     }
 
     const saveAddressSettings = () => {
+        if (userRole !== 'admin') {
+            showToast("⚠️ Solo l'amministratore del gruppo può modificare l'indirizzo condiviso.", 'error')
+            setIsEditingAddress(false)
+            return
+        }
         const clean = addressInput.trim()
         if (!clean) return
         setFamilyAddress(clean)
@@ -575,6 +585,10 @@ export default function Dashboard() {
     }
 
     const requestAdminAddPayment = (memberId: string, memberName: string) => {
+        if (userRole !== 'admin') {
+            showToast("Azione riservata esclusivamente all'amministratore", "error")
+            return
+        }
         const currentPlan = plans.find(p => p.id === userPlanId)
         if (!currentPlan) return;
         const quota = (currentPlan.monthly_cost / currentPlan.max_members).toFixed(2)
@@ -604,6 +618,10 @@ export default function Dashboard() {
     }
 
     const requestDeletePayment = (paymentId: string) => {
+        if (userRole !== 'admin') {
+            showToast("Azione riservata esclusivamente all'amministratore", "error")
+            return
+        }
         setConfirmModal({
             isOpen: true,
             title: "Annulla Pagamento",
@@ -623,7 +641,10 @@ export default function Dashboard() {
     }
 
     const updatePlanDetails = async () => {
-        if (!userPlanId) return;
+        if (userRole !== 'admin' || !userPlanId) {
+            showToast("Azione riservata esclusivamente all'amministratore", "error")
+            return
+        }
         try {
             const { error } = await supabase
                 .from('plans')
@@ -643,6 +664,10 @@ export default function Dashboard() {
     };
 
     const removeMember = async (memberId: string, memberName: string) => {
+        if (userRole !== 'admin') {
+            showToast("Azione riservata esclusivamente all'amministratore", "error")
+            return
+        }
         setConfirmModal({
             isOpen: true,
             title: "Rimuovi Membro",
@@ -1112,7 +1137,7 @@ export default function Dashboard() {
                                             Spotify richiede lo stesso indirizzo per tutti i membri del gruppo Family.
                                         </p>
 
-                                        {isEditingAddress ? (
+                                        {isEditingAddress && userRole === 'admin' ? (
                                             <div className="space-y-3 mb-4">
                                                 <input
                                                     type="text"
@@ -1471,7 +1496,7 @@ export default function Dashboard() {
                             </div>
                         )}
 
-                        {isEditingCards ? (
+                        {isEditingCards && userRole === 'admin' ? (
                             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Intestatario</label>
