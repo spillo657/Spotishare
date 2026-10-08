@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useToast } from './ToastContext';
 import { supabase } from '@/utils/supabase';
 
@@ -165,15 +166,6 @@ export const DEFAULT_TRACK_CATALOG: TrackData[] = [
   }
 ];
 
-const DEVICES = [
-  'Spotify su iPhone',
-  'Spotify Desktop (Mac)',
-  'Spotify Connect (Sonos)',
-  'Spotify su Android',
-  'Spotify Web Player',
-  'Amazon Echo / Alexa'
-];
-
 interface Props {
   members: Member[];
   currentUser: any;
@@ -188,6 +180,7 @@ export default function NowListeningSection({
   onTriggerConfetti
 }: Props) {
   const { showToast } = useToast();
+  const [mounted, setMounted] = useState(false);
   const [activities, setActivities] = useState<MemberActivity[]>([]);
   const [filterMode, setFilterMode] = useState<'all' | 'playing' | 'paused'>('all');
   const [previewingMemberId, setPreviewingMemberId] = useState<string | null>(null);
@@ -203,10 +196,15 @@ export default function NowListeningSection({
   const [searchQuery, setSearchQuery] = useState('');
 
   // Live Spotify Connection State
+  const [isLiveSpotifyChecking, setIsLiveSpotifyChecking] = useState<boolean>(true);
   const [isLiveSpotifyConnected, setIsLiveSpotifyConnected] = useState<boolean>(false);
   const [isSyncingPlayer, setIsSyncingPlayer] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [clientSpotifyToken, setClientSpotifyToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -451,11 +449,13 @@ export default function NowListeningSection({
       });
 
       if (!res.ok) {
+        setIsLiveSpotifyChecking(false);
         if (isManual) setIsRefreshing(false);
         return;
       }
 
       const data = await res.json();
+      setIsLiveSpotifyChecking(false);
 
       if (data.connected === true) {
         setIsLiveSpotifyConnected(true);
@@ -512,6 +512,7 @@ export default function NowListeningSection({
       }
     } catch (err) {
       console.warn('Error polling /api/spotify/current:', err);
+      setIsLiveSpotifyChecking(false);
     } finally {
       if (isManual) {
         setTimeout(() => setIsRefreshing(false), 400);
@@ -627,6 +628,10 @@ export default function NowListeningSection({
           ? myCurrentStateRef.current
           : null;
 
+        const initialDevice = selfState && selfState.isPlaying
+          ? (selfState.device || 'Spotify Web Player')
+          : (isSelf ? 'Nessun dispositivo attivo' : 'Nessun dispositivo attivo');
+
         return {
           memberId: member.id,
           memberName: member.name || (isSelf ? 'Tu' : `Membro #${index + 1}`),
@@ -636,7 +641,7 @@ export default function NowListeningSection({
           track: selfState ? selfState.track : NO_TRACK,
           progressSec: selfState ? selfState.progressSec : 0,
           lastPlayedText: selfState && selfState.isPlaying ? 'In ascolto ora' : 'Nessun brano in esecuzione',
-          device: isSelf ? 'Spotify su iPhone' : DEVICES[index % DEVICES.length]
+          device: initialDevice
         };
       });
     });
@@ -1053,8 +1058,8 @@ export default function NowListeningSection({
       <div className="absolute top-0 right-0 w-80 h-80 bg-[#1DB954]/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* BANNER RE-CONNECT SPOTIFY SE NON AUTORIZZATO */}
-      {!isLiveSpotifyConnected && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-amber-500/15 via-black/40 to-black/40 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+      {!isLiveSpotifyChecking && !isLiveSpotifyConnected && (
+        <div className="mb-6 p-4 bg-gradient-to-r from-amber-500/15 via-black/40 to-black/40 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg animate-in fade-in duration-200">
           <div className="flex items-center gap-3">
             <span className="text-2xl">🔗</span>
             <div>
@@ -1088,7 +1093,12 @@ export default function NowListeningSection({
             <h3 className="text-xl sm:text-2xl font-black text-zinc-100 flex items-center gap-2.5 tracking-tight">
               <span>🎧</span> In Ascolto Ora su Spotify
             </h3>
-            {isLiveSpotifyConnected ? (
+            {isLiveSpotifyChecking ? (
+              <span className="text-[10px] uppercase font-black tracking-wider bg-zinc-800/80 text-zinc-400 border border-white/10 px-3 py-1 rounded-full flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-pulse" />
+                Verifica live...
+              </span>
+            ) : isLiveSpotifyConnected ? (
               <span className="text-[10px] uppercase font-black tracking-wider bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/40 px-3 py-1 rounded-full shadow-[0_0_10px_rgba(29,185,84,0.3)] flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#1DB954] animate-pulse" />
                 Live Connesso
@@ -1528,25 +1538,26 @@ export default function NowListeningSection({
       </div>
 
       {/* SONG PICKER & RECENT TRACKS MODAL */}
-      {showSongPickerModal && (
+      {mounted && showSongPickerModal && typeof document !== 'undefined' && createPortal(
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 md:p-6 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-150"
+          aria-labelledby="song-picker-modal-title"
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-5 md:p-6 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-150"
           onClick={() => setShowSongPickerModal(false)}
         >
           <div
-            className="w-full max-w-2xl max-h-[88vh] sm:max-h-[82vh] flex flex-col rounded-3xl bg-[#121218]/95 border border-white/15 shadow-2xl overflow-hidden relative ring-1 ring-white/10 my-auto"
+            className="w-full max-w-2xl max-h-[85dvh] flex flex-col rounded-3xl bg-[#121218] border border-white/15 shadow-2xl overflow-hidden relative ring-1 ring-white/10 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Emerald Top Accent */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-emerald-400 shrink-0" />
 
             {/* STICKY HEADER */}
-            <div className="sticky top-0 z-10 shrink-0 p-5 sm:p-6 pb-3 border-b border-white/10 bg-[#121218]/95 backdrop-blur-md space-y-3">
+            <div className="shrink-0 p-5 sm:p-6 pb-3 border-b border-white/10 bg-[#121218] space-y-3">
               <div className="flex justify-between items-start gap-3">
                 <div className="min-w-0">
-                  <h3 className="text-lg sm:text-xl font-extrabold text-zinc-100 flex items-center gap-2 truncate">
+                  <h3 id="song-picker-modal-title" className="text-lg sm:text-xl font-extrabold text-zinc-100 flex items-center gap-2 truncate">
                     <span>🎧</span> I tuoi brani e catalogo Spotify
                   </h3>
                   <p className="text-xs text-zinc-400 mt-0.5 truncate">
@@ -1835,7 +1846,7 @@ export default function NowListeningSection({
             </div>
 
             {/* STICKY FOOTER */}
-            <div className="sticky bottom-0 z-10 shrink-0 p-4 sm:p-5 border-t border-white/10 bg-[#121218] flex justify-between items-center">
+            <div className="shrink-0 p-4 sm:p-5 border-t border-white/10 bg-[#121218] flex justify-between items-center">
               <div className="text-xs text-zinc-400 truncate mr-3 min-w-0">
                 {myActivity?.isPlaying && myActivity?.track?.id !== 'none' ? (
                   <span className="flex items-center gap-1.5 text-emerald-400 font-semibold truncate">
@@ -1855,7 +1866,8 @@ export default function NowListeningSection({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

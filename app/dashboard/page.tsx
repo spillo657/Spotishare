@@ -6,6 +6,7 @@ import confetti from 'canvas-confetti'
 import { supabase } from '../../utils/supabase'
 import { useToast } from '@/components/ToastContext'
 import NowListeningSection from '@/components/NowListeningSection'
+import { getCanonicalAppUrl } from '@/utils/canonicalUrl'
 import {
     getNotificationPermission,
     requestNotificationPermission,
@@ -107,6 +108,60 @@ export default function Dashboard() {
             const savedPlaylist = localStorage.getItem(`spotishare_playlist_${userPlanId}`)
             if (savedPlaylist) {
                 setPlaylistUrl(savedPlaylist)
+            }
+
+            // Sync settings with other connected group members via Realtime
+            const channel = supabase.channel(`spotishare_settings_${userPlanId}`, {
+                config: { broadcast: { self: false } }
+            })
+
+            channel
+                .on('broadcast', { event: 'settings_update' }, ({ payload }: any) => {
+                    if (!payload) return
+                    if (payload.familyAddress) {
+                        setFamilyAddress(payload.familyAddress)
+                        localStorage.setItem(`spotishare_address_${userPlanId}`, payload.familyAddress)
+                    }
+                    if (payload.cardDetails) {
+                        setCardDetails(payload.cardDetails)
+                        localStorage.setItem(`spotishare_cards_${userPlanId}`, JSON.stringify(payload.cardDetails))
+                    }
+                    if (payload.playlistUrl) {
+                        setPlaylistUrl(payload.playlistUrl)
+                        localStorage.setItem(`spotishare_playlist_${userPlanId}`, payload.playlistUrl)
+                    }
+                })
+                .on('broadcast', { event: 'request_settings' }, () => {
+                    const currentSavedAddress = localStorage.getItem(`spotishare_address_${userPlanId}`) || familyAddress
+                    const currentSavedCards = localStorage.getItem(`spotishare_cards_${userPlanId}`)
+                    let parsedCards = cardDetails
+                    if (currentSavedCards) {
+                        try { parsedCards = JSON.parse(currentSavedCards) } catch (e) {}
+                    }
+                    const currentSavedPlaylist = localStorage.getItem(`spotishare_playlist_${userPlanId}`) || playlistUrl
+
+                    channel.send({
+                        type: 'broadcast',
+                        event: 'settings_update',
+                        payload: {
+                            familyAddress: currentSavedAddress,
+                            cardDetails: parsedCards,
+                            playlistUrl: currentSavedPlaylist
+                        }
+                    }).catch(console.warn)
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        channel.send({
+                            type: 'broadcast',
+                            event: 'request_settings',
+                            payload: {}
+                        }).catch(console.warn)
+                    }
+                })
+
+            return () => {
+                supabase.removeChannel(channel)
             }
         }
     }, [userPlanId])
@@ -230,6 +285,12 @@ export default function Dashboard() {
         }
         if (userPlanId && typeof window !== 'undefined') {
             localStorage.setItem(`spotishare_cards_${userPlanId}`, JSON.stringify(cardDetails))
+            const channel = supabase.channel(`spotishare_settings_${userPlanId}`)
+            channel.send({
+                type: 'broadcast',
+                event: 'settings_update',
+                payload: { cardDetails }
+            }).catch(console.warn)
         }
         setIsEditingCards(false)
         showToast('✅ Coordinate carte salvate con successo!', 'success')
@@ -246,6 +307,12 @@ export default function Dashboard() {
         setFamilyAddress(clean)
         if (userPlanId && typeof window !== 'undefined') {
             localStorage.setItem(`spotishare_address_${userPlanId}`, clean)
+            const channel = supabase.channel(`spotishare_settings_${userPlanId}`)
+            channel.send({
+                type: 'broadcast',
+                event: 'settings_update',
+                payload: { familyAddress: clean }
+            }).catch(console.warn)
         }
         setIsEditingAddress(false)
         setAddressInput('')
@@ -285,6 +352,12 @@ export default function Dashboard() {
         setPlaylistUrl(finalUrl)
         if (userPlanId && typeof window !== 'undefined') {
             localStorage.setItem(`spotishare_playlist_${userPlanId}`, finalUrl)
+            const channel = supabase.channel(`spotishare_settings_${userPlanId}`)
+            channel.send({
+                type: 'broadcast',
+                event: 'settings_update',
+                payload: { playlistUrl: finalUrl }
+            }).catch(console.warn)
         }
         setIsEditingPlaylist(false)
         setCustomPlaylistInput('')
@@ -1050,7 +1123,7 @@ export default function Dashboard() {
                                         <p className="text-xs text-zinc-400 mb-3">Condividi questo link per far unire un amico al gruppo.</p>
                                         <div className="flex items-center gap-2 bg-black/40 p-2.5 rounded-2xl border border-white/10">
                                             <code className="flex-grow text-green-400 font-mono text-xs truncate px-1">
-                                                {typeof window !== 'undefined' ? `${window.location.origin}/join/${myPlan?.invite_code || 'generazione...'}` : ''}
+                                                {`${getCanonicalAppUrl()}/join/${myPlan?.invite_code || 'generazione...'}`}
                                             </code>
                                             <button
                                                 onClick={async () => {
@@ -1063,12 +1136,15 @@ export default function Dashboard() {
                                                         showToast("Errore nella generazione del codice", "error");
                                                         return;
                                                     }
-                                                    navigator.clipboard.writeText(`${window.location.origin}/join/${code}`);
+                                                    const canonicalInviteUrl = `${getCanonicalAppUrl()}/join/${code}`;
+                                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                                        navigator.clipboard.writeText(canonicalInviteUrl);
+                                                    }
                                                     showToast("Link d'invito copiato negli appunti!", "success");
                                                     triggerConfetti();
                                                     setPlans(prev => prev.map(p => p.id === myPlan?.id ? { ...p, invite_code: code } : p));
                                                 }}
-                                                className="bg-green-500 text-black text-xs font-bold px-4 py-2 rounded-xl hover:bg-green-400 transition-all active:scale-95 shadow-md shrink-0"
+                                                className="bg-green-500 text-black text-xs font-bold px-4 py-2 rounded-xl hover:bg-green-400 transition-all active:scale-95 shadow-md shrink-0 cursor-pointer"
                                             >
                                                 Copia Link
                                             </button>
@@ -1431,43 +1507,38 @@ export default function Dashboard() {
                                 </div>
                             )}
                         </>
+                    ) : loadingPlans ? (
+                        <div className="flex flex-col items-center justify-center py-28 text-center">
+                            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4 animate-bounce">⏳</div>
+                            <p className="text-zinc-300 font-bold text-base">Sincronizzazione dashboard...</p>
+                            <p className="text-zinc-500 text-xs mt-1">Caricamento stato abbonamento e piano Family...</p>
+                        </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-20 text-center">
-                            {loadingPlans ? (
-                                <>
-                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4 animate-bounce">⏳</div>
-                                    <p className="text-zinc-400 font-medium">Sincronizzazione dashboard...</p>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4">❌</div>
-                                    <p className="text-zinc-400 font-medium">Nessun piano associato trovato.</p>
-                                </>
-                            )}
-                            {(!userPlanId) && (
-                                <div className="mt-6 p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md max-w-md w-full shadow-2xl">
-                                    <h3 className="text-xl font-bold text-zinc-100 mb-2">Inizia con SpotiShare</h3>
-                                    <p className="text-sm text-zinc-400 mb-6">Non sei ancora associato a nessun gruppo. Puoi crearne uno nuovo come amministratore oppure unirti a uno esistente con un codice invito.</p>
-                                    <div className="flex flex-col gap-4">
-                                        <div className="flex gap-3">
-                                            <div className="flex-grow text-left">
-                                                <label className="text-[10px] uppercase tracking-widest font-semibold text-zinc-400 ml-1">Costo Mensile (€)</label>
-                                                <input type="number" placeholder="es. 17.99" id="newPlanCost" className="w-full bg-black/40 border border-white/10 text-zinc-100 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50 text-sm" />
-                                            </div>
-                                            <div className="w-32 text-left">
-                                                <label className="text-[10px] uppercase tracking-widest font-semibold text-zinc-400 ml-1">Membri Max</label>
-                                                <input type="number" placeholder="6" id="newPlanMax" className="w-full bg-black/40 border border-white/10 text-zinc-100 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50 text-sm" />
-                                            </div>
+                            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-3xl mb-4">❌</div>
+                            <p className="text-zinc-400 font-medium">Nessun piano associato trovato.</p>
+                            <div className="mt-6 p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md max-w-md w-full shadow-2xl">
+                                <h3 className="text-xl font-bold text-zinc-100 mb-2">Inizia con SpotiShare</h3>
+                                <p className="text-sm text-zinc-400 mb-6">Non sei ancora associato a nessun gruppo. Puoi crearne uno nuovo come amministratore oppure unirti a uno esistente con un codice invito.</p>
+                                <div className="flex flex-col gap-4">
+                                    <div className="flex gap-3">
+                                        <div className="flex-grow text-left">
+                                            <label className="text-[10px] uppercase tracking-widest font-semibold text-zinc-400 ml-1">Costo Mensile (€)</label>
+                                            <input type="number" placeholder="es. 17.99" id="newPlanCost" className="w-full bg-black/40 border border-white/10 text-zinc-100 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50 text-sm" />
                                         </div>
-                                        <button onClick={async () => { const cost = parseFloat((document.getElementById('newPlanCost') as HTMLInputElement).value); const max = parseInt((document.getElementById('newPlanMax') as HTMLInputElement).value); if (isNaN(cost) || isNaN(max)) { showToast("Inserisci valori validi", "error"); return; } await createPlan(cost, max); }} className="bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black font-extrabold py-3.5 rounded-xl hover:scale-[1.02] transition-all shadow-lg shadow-green-500/20 text-sm uppercase">Crea Gruppo Ora</button>
-                                        <div className="relative py-2">
-                                            <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-white/10"></span></div>
-                                            <div className="relative flex justify-center text-xs uppercase"><span className="bg-[#0B0B0F] px-2 text-zinc-500">Oppure</span></div>
+                                        <div className="w-32 text-left">
+                                            <label className="text-[10px] uppercase tracking-widest font-semibold text-zinc-400 ml-1">Membri Max</label>
+                                            <input type="number" placeholder="6" id="newPlanMax" className="w-full bg-black/40 border border-white/10 text-zinc-100 rounded-xl p-3 outline-none focus:ring-2 focus:ring-green-500/50 text-sm" />
                                         </div>
-                                        <a href="/join" className="text-center bg-white/5 border border-white/10 text-zinc-300 font-bold py-3 rounded-xl hover:bg-white/10 transition-all active:scale-95 text-sm">Ho un codice invito</a>
                                     </div>
+                                    <button onClick={async () => { const cost = parseFloat((document.getElementById('newPlanCost') as HTMLInputElement).value); const max = parseInt((document.getElementById('newPlanMax') as HTMLInputElement).value); if (isNaN(cost) || isNaN(max)) { showToast("Inserisci valori validi", "error"); return; } await createPlan(cost, max); }} className="bg-gradient-to-r from-[#1DB954] to-[#1ed760] text-black font-extrabold py-3.5 rounded-xl hover:scale-[1.02] transition-all shadow-lg shadow-green-500/20 text-sm uppercase">Crea Gruppo Ora</button>
+                                    <div className="relative py-2">
+                                        <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-white/10"></span></div>
+                                        <div className="relative flex justify-center text-xs uppercase"><span className="bg-[#0B0B0F] px-2 text-zinc-500">Oppure</span></div>
+                                    </div>
+                                    <a href="/join" className="text-center bg-white/5 border border-white/10 text-zinc-300 font-bold py-3 rounded-xl hover:bg-white/10 transition-all active:scale-95 text-sm">Ho un codice invito</a>
                                 </div>
-                            )}
+                            </div>
                         </div>
                     )}
                 </main>
