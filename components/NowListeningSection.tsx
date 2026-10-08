@@ -1344,12 +1344,12 @@ export default function NowListeningSection({
         ) : (
           <div className="space-y-3">
             {/* TABLE HEADER */}
-            <div className="hidden lg:grid grid-cols-12 gap-4 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 border-b border-white/5">
+            <div className="hidden lg:grid grid-cols-12 gap-3 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 border-b border-white/5">
               <div className="col-span-1 text-center">#</div>
-              <div className="col-span-4">Brano & Artista</div>
-              <div className="col-span-3">Membro / Dispositivo</div>
-              <div className="col-span-2">Avanzamento</div>
-              <div className="col-span-2 text-right">Azioni</div>
+              <div className="col-span-4 xl:col-span-4">Brano & Artista</div>
+              <div className="col-span-2 xl:col-span-3">Membro / Dispositivo</div>
+              <div className="col-span-2 xl:col-span-2">Avanzamento</div>
+              <div className="col-span-3 xl:col-span-2 text-right">Azioni</div>
             </div>
 
             {/* ROWS */}
@@ -1363,7 +1363,7 @@ export default function NowListeningSection({
               return (
                 <div
                   key={act.memberId}
-                  className={`p-4 bg-black/40 hover:bg-black/60 border ${
+                  className={`p-3.5 sm:p-4 bg-black/40 hover:bg-black/60 border ${
                     act.isSelf
                       ? hasActiveSong
                         ? 'border-[#1DB954]/40 bg-gradient-to-r from-[#1DB954]/5 to-black/50 shadow-[0_4px_25px_rgba(29,185,84,0.15)]'
@@ -1371,7 +1371,7 @@ export default function NowListeningSection({
                       : hasActiveSong
                       ? 'border-[#1DB954]/20 hover:border-[#1DB954]/40 shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
                       : 'border-white/5 hover:border-white/15'
-                  } rounded-2xl sm:rounded-3xl transition-all duration-200 flex flex-col lg:grid lg:grid-cols-12 gap-4 lg:items-center`}
+                  } rounded-2xl sm:rounded-3xl transition-all duration-200 flex flex-col lg:grid lg:grid-cols-12 gap-3.5 lg:items-center min-w-0 overflow-hidden`}
                 >
                   {/* COL 1: EQUALIZER */}
                   <div className="hidden lg:flex lg:col-span-1 items-center justify-center text-zinc-400 text-xs font-mono font-bold">
@@ -1388,8 +1388,8 @@ export default function NowListeningSection({
                   </div>
 
                   {/* COL 2: ALBUM COVER & TRACK INFO */}
-                  <div className="lg:col-span-4 flex items-center gap-3.5 min-w-0">
-                    <div className="relative w-13 h-13 shrink-0 rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 flex items-center justify-center">
+                  <div className="lg:col-span-4 flex items-center gap-3 min-w-0">
+                    <div className="relative w-12 h-12 shrink-0 rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 flex items-center justify-center">
                       {hasActiveSong && act.track.coverUrl ? (
                         <img
                           src={act.track.coverUrl}
@@ -1423,9 +1423,9 @@ export default function NowListeningSection({
                             {act.track.artist}
                           </p>
                           <p className="text-[10px] text-zinc-500 truncate mt-0.5 flex items-center gap-1.5">
-                            <span>{act.track.album}</span>
+                            <span className="truncate">{act.track.album}</span>
                             <span>•</span>
-                            <span className="text-[#1DB954] font-medium">{act.track.genre}</span>
+                            <span className="text-[#1DB954] font-medium shrink-0">{act.track.genre}</span>
                           </p>
                         </>
                       ) : (
@@ -1442,17 +1442,17 @@ export default function NowListeningSection({
                   </div>
 
                   {/* COL 3: MEMBER & DEVICE */}
-                  <div className="lg:col-span-3 flex items-center gap-3 min-w-0">
+                  <div className="lg:col-span-2 xl:col-span-3 flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/15 to-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-white shrink-0 shadow-inner">
                       {act.memberName.charAt(0).toUpperCase()}
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
                         <p className="text-xs font-extrabold text-zinc-200 truncate">
                           {act.memberName}
                         </p>
                         {act.isSelf && (
-                          <span className="text-[9px] font-black uppercase tracking-wider bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/40 px-2 py-0.5 rounded-md shadow-sm">
+                          <span className="text-[9px] font-black uppercase tracking-wider bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/40 px-1.5 py-0.5 rounded-md shadow-sm shrink-0">
                             Tu
                           </span>
                         )}
@@ -1480,20 +1480,20 @@ export default function NowListeningSection({
                     ) : (
                       <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500 bg-white/5 px-2.5 py-1 rounded-xl w-fit">
                         <span>⏸️</span>
-                        <span>Nessun brano in esecuzione</span>
+                        <span className="truncate">In pausa</span>
                       </div>
                     )}
                   </div>
 
                   {/* COL 5: ACTIONS */}
-                  <div className="lg:col-span-2 flex items-center justify-end gap-2 flex-wrap">
+                  <div className="lg:col-span-3 xl:col-span-2 flex items-center justify-end gap-1.5 sm:gap-2 flex-wrap min-w-0">
                     {/* Sync / Listen Together */}
                     {!act.isSelf && hasActiveSong && (
                       <button
                         type="button"
                         onClick={() => handleSyncWithMember(act)}
                         disabled={isSyncingPlayer}
-                        className="inline-flex items-center gap-1 bg-[#1DB954]/15 hover:bg-[#1DB954] text-[#1DB954] hover:text-black border border-[#1DB954]/30 font-extrabold text-xs px-2.5 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm disabled:opacity-50 cursor-pointer"
+                        className="inline-flex items-center gap-1 bg-[#1DB954]/15 hover:bg-[#1DB954] text-[#1DB954] hover:text-black border border-[#1DB954]/30 font-extrabold text-xs px-2.5 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm disabled:opacity-50 cursor-pointer shrink-0"
                         title={`Riproduci "${act.track.title}" direttamente sul tuo Spotify`}
                       >
                         <span>✨</span>
@@ -1506,7 +1506,7 @@ export default function NowListeningSection({
                       <button
                         type="button"
                         onClick={() => handlePlaySoundPreview(act)}
-                        className={`p-1.5 sm:px-2.5 sm:py-1.5 border text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center gap-1 cursor-pointer ${
+                        className={`p-1.5 sm:px-2.5 sm:py-1.5 border text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center gap-1 cursor-pointer shrink-0 ${
                           isPreviewing
                             ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse'
                             : 'bg-white/5 border-white/10 text-zinc-300 hover:text-white hover:bg-white/10'
@@ -1521,7 +1521,7 @@ export default function NowListeningSection({
                     <button
                       type="button"
                       onClick={() => handleTogglePlay(act.memberId)}
-                      className={`p-1.5 border rounded-xl transition-all text-xs cursor-pointer ${
+                      className={`p-1.5 border rounded-xl transition-all text-xs cursor-pointer shrink-0 ${
                         hasActiveSong
                           ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
                           : 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
@@ -1537,20 +1537,20 @@ export default function NowListeningSection({
                         href={act.track.spotifyUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm shadow-[#1DB954]/25 shrink-0"
+                        className="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-2.5 sm:px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm shadow-[#1DB954]/25 shrink-0"
                         title="Apri traccia su Spotify"
                       >
                         <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
                           <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.516 17.305c-.216.355-.678.47-1.033.254-2.827-1.727-6.386-2.118-10.578-1.16-.407.094-.813-.162-.907-.568-.094-.407.162-.813.568-.907 4.588-1.049 8.528-.607 11.696 1.348.355.216.47.678.254 1.033zm1.472-3.275c-.272.443-.853.585-1.296.313-3.237-1.99-8.172-2.565-12.001-1.402-.497.151-1.026-.134-1.177-.631-.151-.497.134-1.026.631-1.177 4.382-1.33 9.824-.693 13.53 1.587.443.272.585.853.313 1.296zm.127-3.41c-3.882-2.305-10.288-2.518-13.998-1.391-.597.181-1.233-.16-1.414-.757-.181-.597.16-1.233.757-1.414 4.268-1.296 11.341-1.047 15.807 1.604.538.319.715 1.018.396 1.556-.319.538-1.018.715-1.556.396z" />
                         </svg>
-                        <span>Spotify</span>
+                        <span className="hidden sm:inline">Spotify</span>
                       </a>
                     ) : (
                       act.isSelf && (
                         <button
                           type="button"
                           onClick={() => setShowSongPickerModal(true)}
-                          className="text-xs text-zinc-400 hover:text-zinc-200 bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/10 transition-all font-bold cursor-pointer"
+                          className="text-xs text-zinc-400 hover:text-zinc-200 bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/10 transition-all font-bold cursor-pointer shrink-0"
                         >
                           Scegli
                         </button>

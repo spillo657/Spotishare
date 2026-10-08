@@ -841,7 +841,7 @@ export default function Dashboard() {
             <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] bg-green-500/10 blur-[130px] rounded-full pointer-events-none"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] bg-indigo-500/10 blur-[130px] rounded-full pointer-events-none"></div>
 
-            <div className="max-w-5xl mx-auto relative z-10">
+            <div className="max-w-6xl xl:max-w-7xl mx-auto relative z-10">
                 {/* BANNER NOTIFICA SCADENZA / SOLLECITO ADMIN */}
                 {deadline.isReminderActive && (
                     <div className="mb-8 bg-amber-500/10 border border-amber-500/30 p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-pulse backdrop-blur-xl shadow-xl shadow-amber-500/5">
@@ -1059,23 +1059,23 @@ export default function Dashboard() {
                                                     const memberDebt = calculateUserDebt(member.id, allGroupPayments.length > 0 ? allGroupPayments : payments)
                                                     const isMemberAdmin = member.role === 'admin'
                                                     return (
-                                                        <li key={member.id} className="p-3.5 flex items-center gap-3.5 hover:bg-white/5 transition-all rounded-2xl group">
-                                                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/15 text-green-400 flex items-center justify-center font-black text-lg shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+                                                        <li key={member.id} className="p-3.5 flex items-center gap-3 hover:bg-white/5 transition-all rounded-2xl group min-w-0">
+                                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/15 text-green-400 flex items-center justify-center font-black text-base shadow-inner shrink-0 group-hover:scale-105 transition-transform">
                                                                 {member.name ? member.name.charAt(0).toUpperCase() : '?'}
                                                             </div>
                                                             <div className="flex-grow min-w-0">
-                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
                                                                     <p className="font-bold text-zinc-100 text-sm truncate">
                                                                         {member.name}
                                                                     </p>
                                                                     {member.id === user?.id && (
-                                                                        <span className="text-green-400 text-[9px] border border-green-400/50 bg-green-500/10 px-2 py-0.5 rounded-full uppercase tracking-widest font-bold">Tu</span>
+                                                                        <span className="text-green-400 text-[9px] border border-green-400/50 bg-green-500/10 px-2 py-0.5 rounded-full uppercase tracking-widest font-bold shrink-0">Tu</span>
                                                                     )}
                                                                     {isMemberAdmin && (
-                                                                        <span className="text-red-400 text-[9px] border border-red-500/40 bg-red-500/10 px-2 py-0.5 rounded-full uppercase tracking-widest font-bold">Admin</span>
+                                                                        <span className="text-red-400 text-[9px] border border-red-500/40 bg-red-500/10 px-2 py-0.5 rounded-full uppercase tracking-widest font-bold shrink-0">Admin</span>
                                                                     )}
                                                                 </div>
-                                                                <div className="flex items-center gap-2 mt-0.5">
+                                                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                                                     <p className="text-zinc-400 text-xs truncate">{member.email}</p>
                                                                     {memberDebt > 0 ? (
                                                                         <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 shrink-0">
@@ -1141,17 +1141,17 @@ export default function Dashboard() {
                                             <span className="text-xl">🎟️</span>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                             {/* BOX 1: CODICE D'INVITO A 6 CARATTERI */}
-                                            <div className="bg-black/50 border border-green-500/30 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-inner">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] uppercase font-black tracking-widest text-green-400">
+                                            <div className="bg-black/50 border border-green-500/30 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-inner min-w-0">
+                                                <div className="flex justify-between items-center gap-2">
+                                                    <span className="text-[10px] uppercase font-black tracking-widest text-green-400 truncate">
                                                         Codice d&apos;Invito
                                                     </span>
-                                                    <span className="text-[10px] text-zinc-500 font-mono">6 caratteri</span>
+                                                    <span className="text-[10px] text-zinc-500 font-mono shrink-0">6 caratteri</span>
                                                 </div>
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="font-mono text-xl sm:text-2xl font-black text-green-400 tracking-widest">
+                                                <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                                                    <span className="font-mono text-xl sm:text-2xl font-black text-green-400 tracking-widest truncate">
                                                         {myPlan?.invite_code || '---'}
                                                     </span>
                                                     <button
@@ -1173,7 +1173,7 @@ export default function Dashboard() {
                                                             triggerConfetti();
                                                             setPlans(prev => prev.map(p => p.id === myPlan?.id ? { ...p, invite_code: code } : p));
                                                         }}
-                                                        className="bg-green-500/20 hover:bg-green-500 text-green-400 hover:text-black border border-green-500/40 text-xs font-black px-4 py-2.5 rounded-xl transition-all active:scale-95 shadow-sm cursor-pointer whitespace-nowrap"
+                                                        className="bg-green-500/20 hover:bg-green-500 text-green-400 hover:text-black border border-green-500/40 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 shadow-sm cursor-pointer whitespace-nowrap shrink-0"
                                                     >
                                                         📋 Copia Codice
                                                     </button>
@@ -1181,15 +1181,15 @@ export default function Dashboard() {
                                             </div>
 
                                             {/* BOX 2: LINK COMPLETO */}
-                                            <div className="bg-black/50 border border-white/10 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-inner">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] uppercase font-black tracking-widest text-zinc-400">
+                                            <div className="bg-black/50 border border-white/10 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-inner min-w-0">
+                                                <div className="flex justify-between items-center gap-2">
+                                                    <span className="text-[10px] uppercase font-black tracking-widest text-zinc-400 truncate">
                                                         Link Diretto
                                                     </span>
-                                                    <span className="text-[10px] text-zinc-500">Accesso 1-click</span>
+                                                    <span className="text-[10px] text-zinc-500 shrink-0">Accesso 1-click</span>
                                                 </div>
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <code className="text-zinc-300 font-mono text-xs truncate max-w-[140px] sm:max-w-[190px]">
+                                                <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap min-w-0">
+                                                    <code className="text-zinc-300 font-mono text-xs truncate min-w-0 flex-1">
                                                         {`${getCanonicalAppUrl()}/join/${myPlan?.invite_code || '...'}`}
                                                     </code>
                                                     <button
@@ -1212,7 +1212,7 @@ export default function Dashboard() {
                                                             triggerConfetti();
                                                             setPlans(prev => prev.map(p => p.id === myPlan?.id ? { ...p, invite_code: code } : p));
                                                         }}
-                                                        className="bg-white/10 hover:bg-white/20 text-white border border-white/15 text-xs font-black px-4 py-2.5 rounded-xl transition-all active:scale-95 shadow-sm cursor-pointer whitespace-nowrap"
+                                                        className="bg-white/10 hover:bg-white/20 text-white border border-white/15 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 shadow-sm cursor-pointer whitespace-nowrap shrink-0"
                                                     >
                                                         🔗 Copia Link
                                                     </button>
@@ -1501,14 +1501,14 @@ export default function Dashboard() {
                                                     {members.map(member => {
                                                         const memberDebt = calculateUserDebt(member.id, allGroupPayments)
                                                         return (
-                                                            <li key={member.id} className="flex justify-between items-center bg-black/30 p-3.5 rounded-2xl border border-white/5 hover:border-green-500/30 transition-all group">
-                                                                <div className="flex flex-col">
-                                                                    <span className="font-bold text-zinc-200 text-sm">{member.name}</span>
+                                                            <li key={member.id} className="flex justify-between items-center gap-3 bg-black/30 p-3.5 rounded-2xl border border-white/5 hover:border-green-500/30 transition-all group min-w-0">
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="font-bold text-zinc-200 text-sm truncate">{member.name}</span>
                                                                     {memberDebt > 0 && (
-                                                                        <span className="text-[10px] text-amber-400">In sospeso: {memberDebt} quota/e</span>
+                                                                        <span className="text-[10px] text-amber-400 truncate">In sospeso: {memberDebt} quota/e</span>
                                                                     )}
                                                                 </div>
-                                                                <div className="flex items-center gap-2">
+                                                                <div className="flex items-center gap-2 shrink-0">
                                                                     {memberDebt > 0 && (
                                                                         <button
                                                                             onClick={() => sendWhatsAppMemberReminder(member, memberDebt, (myPlan.monthly_cost / myPlan.max_members).toFixed(2))}
@@ -1520,7 +1520,7 @@ export default function Dashboard() {
                                                                     )}
                                                                     <button
                                                                         onClick={() => requestAdminAddPayment(member.id, member.name)}
-                                                                        className="text-xs bg-transparent border border-green-500/50 text-green-400 font-bold px-3 py-1.5 rounded-xl hover:bg-green-500 hover:text-black transition-all active:scale-95"
+                                                                        className="text-xs bg-transparent border border-green-500/50 text-green-400 font-bold px-3 py-1.5 rounded-xl hover:bg-green-500 hover:text-black transition-all active:scale-95 whitespace-nowrap"
                                                                     >
                                                                         + Segna Pagato
                                                                     </button>
@@ -1533,13 +1533,13 @@ export default function Dashboard() {
                                         </div>
 
                                         {/* STORICO GENERALE DI TUTTI I PAGAMENTI */}
-                                        <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col justify-between">
+                                        <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col gap-4">
                                             <div>
-                                                <div className="flex justify-between items-center mb-4">
-                                                    <h3 className="font-extrabold text-lg text-zinc-100 flex items-center gap-2">
+                                                <div className="flex justify-between items-center mb-4 gap-2">
+                                                    <h3 className="font-extrabold text-lg text-zinc-100 flex items-center gap-2 truncate">
                                                         <span>📋</span> Registro Transazioni
                                                     </h3>
-                                                    <span className="text-xs text-zinc-400 font-semibold">
+                                                    <span className="text-xs text-zinc-400 font-semibold shrink-0">
                                                         {allGroupPayments.length} registrati
                                                     </span>
                                                 </div>
@@ -1547,19 +1547,19 @@ export default function Dashboard() {
                                                 {allGroupPayments.length > 0 ? (
                                                     <ul className="space-y-2.5 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                                                         {allGroupPayments.map(payment => (
-                                                            <li key={payment.id} className="flex justify-between items-center text-sm bg-black/30 p-3.5 rounded-2xl border border-white/5 hover:border-white/15 transition-all group">
-                                                                <div className="flex flex-col">
-                                                                    <span className="font-bold text-zinc-200">{payment.users?.name || 'Utente'}</span>
-                                                                    <span className="text-[10px] text-zinc-500">Data: {new Date(payment.payment_date).toLocaleDateString('it-IT')}</span>
+                                                            <li key={payment.id} className="flex justify-between items-center gap-3 text-sm bg-black/30 p-3.5 rounded-2xl border border-white/5 hover:border-white/15 transition-all group min-w-0">
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="font-bold text-zinc-200 truncate">{payment.users?.name || 'Utente'}</span>
+                                                                    <span className="text-[10px] text-zinc-500 truncate">Data: {new Date(payment.payment_date).toLocaleDateString('it-IT')}</span>
                                                                 </div>
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className="text-[9px] font-bold text-green-400 bg-green-500/10 px-2.5 py-1 rounded-md border border-green-500/20 uppercase tracking-widest">
+                                                                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                                                    <span className="text-[9px] font-bold text-green-400 bg-green-500/10 px-2.5 py-1 rounded-md border border-green-500/20 uppercase tracking-widest shrink-0">
                                                                         {payment.target_month !== null && payment.target_month !== undefined ? mesiCorti[payment.target_month] : 'N/D'} {payment.target_year || ''}
                                                                     </span>
-                                                                    <span className="text-green-400 font-black text-sm">€{payment.amount.toFixed(2)}</span>
+                                                                    <span className="text-green-400 font-black text-sm shrink-0">€{payment.amount.toFixed(2)}</span>
                                                                     <button
                                                                         onClick={() => requestDeletePayment(payment.id)}
-                                                                        className="text-red-400 bg-red-500/10 p-1.5 rounded-xl hover:bg-red-500 hover:text-white transition-all opacity-40 group-hover:opacity-100"
+                                                                        className="text-red-400 bg-red-500/10 p-1.5 rounded-xl hover:bg-red-500 hover:text-white transition-all opacity-40 group-hover:opacity-100 shrink-0"
                                                                         title="Annulla incasso"
                                                                     >
                                                                         🗑️
