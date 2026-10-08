@@ -239,7 +239,7 @@ export default function Dashboard() {
         setConfirmModal({
             isOpen: true,
             title: "Conferma Pagamento",
-            message: \`Stai per versare la quota di €\${quota} per saldare il mese di \${targetMonthName} \${selectedTargetYear}. Confermi?\`,
+            message: 'Stai per versare la quota di €' + quota + ' per saldare il mese di ' + targetMonthName + ' ' + selectedTargetYear + '. Confermi?',
             action: async () => {
                 setIsPaying(true)
                 const { error } = await supabase.from('payments').insert({
@@ -250,7 +250,7 @@ export default function Dashboard() {
                     target_year: selectedTargetYear
                 })
                 if (!error) {
-                    showToast(\`💸 Pagamento per \${targetMonthName} registrato!\`, 'success')
+                    showToast('💸 Pagamento per ' + targetMonthName + ' registrato!', 'success')
                     fetchPayments(user.id)
                     if (userRole === 'admin') fetchAllGroupPayments(userPlanId!)
                 } else {
@@ -270,7 +270,7 @@ export default function Dashboard() {
         setConfirmModal({
             isOpen: true,
             title: "Registra Incasso Manuale",
-            message: \`Vuoi confermare di aver ricevuto €\${quota} da \${memberName} per il mese di \${targetMonthName} \${selectedTargetYear}?\`,
+            message: 'Vuoi confermare di aver ricevuto €' + quota + ' da ' + memberName + ' per il mese di ' + targetMonthName + ' ' + selectedTargetYear + '?',
             action: async () => {
                 const { error } = await supabase.from('payments').insert({
                     user_id: memberId,
@@ -280,7 +280,7 @@ export default function Dashboard() {
                     target_year: selectedTargetYear
                 })
                 if (!error) {
-                    showToast(\`✅ Incasso di \${targetMonthName} registrato per \${memberName}\`, 'success')
+                    showToast('✅ Incasso di ' + targetMonthName + ' registrato per ' + memberName, 'success')
                     fetchAllGroupPayments(userPlanId!)
                 } else {
                     showToast("Errore di registrazione", 'error')
@@ -333,7 +333,7 @@ export default function Dashboard() {
         setConfirmModal({
             isOpen: true,
             title: "Rimuovi Membro",
-            message: \`Sei sicuro di voler rimuovere \${memberName} dal gruppo? L'utente non avrà più accesso alla dashboard del gruppo.\`,
+            message: 'Sei sicuro di voler rimuovere ' + memberName + ' dal gruppo? L\'utente non avrà più accesso alla dashboard del gruppo.',
             action: async () => {
                 setIsPaying(true)
                 const { error } = await supabase
@@ -425,7 +425,7 @@ export default function Dashboard() {
                                             <div className="relative flex items-center justify-center w-28 h-28">
                                                 <svg className="w-full h-full transform -rotate-90">
                                                     <circle cx="56" cy="56" r={ringRadius} stroke="currentColor" strokeWidth="6" fill="transparent" className="text-white/10" />
-                                                    <circle cx="56" cy="56" r={ringRadius} stroke="currentColor" strokeWidth="6" fill="transparent" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" className={\`\${deadline.daysLeft <= 3 ? 'text-red-500' : 'text-green-500'} transition-all duration-1000 ease-in-out\`} />
+                                                    <circle cx="56" cy="56" r={ringRadius} stroke="currentColor" strokeWidth="6" fill="transparent" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" className={" " + (deadline.daysLeft <= 3 ? 'text-red-500' : 'text-green-500') + " transition-all duration-1000 ease-in-out"} />
                                                 </svg>
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                                                     <span className={"text-4xl font-black " + (deadline.daysLeft <= 3 ? 'text-red-500' : 'text-zinc-100')}>
@@ -477,7 +477,7 @@ export default function Dashboard() {
                                                 return (
                                                     <div key={mese} className={"snap-start min-w-[80px] p-3 rounded-full border text-center flex flex-col items-center justify-center transition-all " + (isPaid ? 'bg-green-500/20 text-green-400 border-green-500/30' : isCurrentMonth ? 'animate-pulse bg-amber-500/10 text-amber-500 border-amber-500/30' : 'bg-transparent text-zinc-600 border-white/10')}>
                                                         <span className="text-[9px] uppercase font-bold mb-1">\${mese}</span>
-                                                        <span className="text-lg">\${isPaid ? '✅' : isCurrentMonth ? '🔔' : '⏳'}</span>
+                                                        <span className="text-lg">{isPaid ? '✅' : isCurrentMonth ? '🔔' : '⏳'}</span>
                                                     </div>
                                                 )
                                             })}
@@ -491,7 +491,7 @@ export default function Dashboard() {
                                             {members.map((member) => (
                                                 <li key={member.id} className="p-4 flex items-center gap-4 hover:bg-white/5 transition-all rounded-2xl group">
                                                     <div className="w-12 h-12 rounded-full bg-white/10 border border-white/10 text-green-400 flex items-center justify-center font-bold text-xl shadow-inner group-hover:scale-110 transition-transform">
-                                                        \${member.name ? member.name.charAt(0).toUpperCase() : '?'}
+                                                        {member.name ? member.name.charAt(0).toUpperCase() : '?'}
                                                     </div>
                                                     <div className="flex-grow">
                                                         <p className="font-bold text-zinc-100 flex items-center gap-2">
