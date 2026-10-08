@@ -26,19 +26,27 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Use getSession instead of getUser for faster middleware checks.
-  // getUser() makes a network request to Supabase every time.
+  // Authenticate using getUser() to guarantee cryptographic token verification against Supabase Auth
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const protectedRoutes = ['/dashboard'];
+  const protectedRoutes = ['/dashboard', '/profile'];
   const isProtectedRoute = protectedRoutes.some(route => request.nextUrl.pathname.startsWith(route));
 
-  if (isProtectedRoute && !session) {
+  if (isProtectedRoute && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
+    url.searchParams.set('redirect', request.nextUrl.pathname);
     return NextResponse.redirect(url);
+  }
+
+  // Edge protection: Reject unauthenticated calls to internal Spotify proxy API routes
+  if (request.nextUrl.pathname.startsWith('/api/spotify') && !user) {
+    return NextResponse.json(
+      { success: false, error: 'UNAUTHORIZED', message: 'Non autorizzato' },
+      { status: 401 }
+    );
   }
 
   return response;

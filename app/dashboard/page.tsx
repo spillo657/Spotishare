@@ -119,56 +119,46 @@ export default function Dashboard() {
                 setPlaylistUrl(savedPlaylist)
             }
 
-            // Sync settings with other connected group members via Realtime
+            // Securely load verified settings from server/database
+            const loadVerifiedSettings = async () => {
+                try {
+                    const res = await fetch(`/api/plan/settings?planId=${encodeURIComponent(userPlanId)}`)
+                    if (res.ok) {
+                        const data = await res.json()
+                        if (data.success && data.settings) {
+                            if (data.settings.familyAddress) {
+                                setFamilyAddress(data.settings.familyAddress)
+                                localStorage.setItem(`spotishare_address_${userPlanId}`, data.settings.familyAddress)
+                            }
+                            if (data.settings.cardDetails) {
+                                setCardDetails(data.settings.cardDetails)
+                                localStorage.setItem(`spotishare_cards_${userPlanId}`, JSON.stringify(data.settings.cardDetails))
+                            }
+                            if (data.settings.playlistUrl) {
+                                setPlaylistUrl(data.settings.playlistUrl)
+                                localStorage.setItem(`spotishare_playlist_${userPlanId}`, data.settings.playlistUrl)
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Could not fetch server settings:', err)
+                }
+            }
+            loadVerifiedSettings()
+
+            // Sync settings notification with other connected group members via Realtime
             const channel = supabase.channel(`spotishare_settings_${userPlanId}`, {
                 config: { broadcast: { self: false } }
             })
             settingsChannelRef.current = channel
 
             channel
-                .on('broadcast', { event: 'settings_update' }, ({ payload }: any) => {
-                    if (!payload) return
-                    if (payload.familyAddress) {
-                        setFamilyAddress(payload.familyAddress)
-                        localStorage.setItem(`spotishare_address_${userPlanId}`, payload.familyAddress)
-                    }
-                    if (payload.cardDetails) {
-                        setCardDetails(payload.cardDetails)
-                        localStorage.setItem(`spotishare_cards_${userPlanId}`, JSON.stringify(payload.cardDetails))
-                    }
-                    if (payload.playlistUrl) {
-                        setPlaylistUrl(payload.playlistUrl)
-                        localStorage.setItem(`spotishare_playlist_${userPlanId}`, payload.playlistUrl)
-                    }
+                .on('broadcast', { event: 'settings_update' }, () => {
+                    // Security fix: Do not trust coordinates sent over broadcast directly.
+                    // Always re-fetch verified settings from the server.
+                    loadVerifiedSettings()
                 })
-                .on('broadcast', { event: 'request_settings' }, () => {
-                    const currentSavedAddress = localStorage.getItem(`spotishare_address_${userPlanId}`) || familyAddress
-                    const currentSavedCards = localStorage.getItem(`spotishare_cards_${userPlanId}`)
-                    let parsedCards = cardDetails
-                    if (currentSavedCards) {
-                        try { parsedCards = JSON.parse(currentSavedCards) } catch (e) {}
-                    }
-                    const currentSavedPlaylist = localStorage.getItem(`spotishare_playlist_${userPlanId}`) || playlistUrl
-
-                    channel.send({
-                        type: 'broadcast',
-                        event: 'settings_update',
-                        payload: {
-                            familyAddress: currentSavedAddress,
-                            cardDetails: parsedCards,
-                            playlistUrl: currentSavedPlaylist
-                        }
-                    }).catch(console.warn)
-                })
-                .subscribe((status) => {
-                    if (status === 'SUBSCRIBED') {
-                        channel.send({
-                            type: 'broadcast',
-                            event: 'request_settings',
-                            payload: {}
-                        }).catch(console.warn)
-                    }
-                })
+                .subscribe()
 
             return () => {
                 settingsChannelRef.current = null
@@ -288,27 +278,42 @@ export default function Dashboard() {
         }
     }
 
-    const saveCardsSettings = () => {
+    const saveCardsSettings = async () => {
         if (userRole !== 'admin') {
             showToast("⚠️ Solo l'amministratore del gruppo può modificare le coordinate delle carte.", 'error')
             setIsEditingCards(false)
             return
         }
         if (userPlanId && typeof window !== 'undefined') {
-            localStorage.setItem(`spotishare_cards_${userPlanId}`, JSON.stringify(cardDetails))
-            if (settingsChannelRef.current) {
-                settingsChannelRef.current.send({
-                    type: 'broadcast',
-                    event: 'settings_update',
-                    payload: { cardDetails }
-                }).catch(console.warn)
+            try {
+                const res = await fetch('/api/plan/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        planId: userPlanId,
+                        cardDetails
+                    })
+                })
+                const data = await res.json()
+                if (!data.success) throw new Error(data.message || data.error)
+
+                localStorage.setItem(`spotishare_cards_${userPlanId}`, JSON.stringify(cardDetails))
+                if (settingsChannelRef.current) {
+                    settingsChannelRef.current.send({
+                        type: 'broadcast',
+                        event: 'settings_update',
+                        payload: { timestamp: Date.now() }
+                    }).catch(console.warn)
+                }
+                showToast('✅ Coordinate carte salvate con successo!', 'success')
+            } catch (err: any) {
+                showToast('Errore nel salvataggio: ' + err.message, 'error')
             }
         }
         setIsEditingCards(false)
-        showToast('✅ Coordinate carte salvate con successo!', 'success')
     }
 
-    const saveAddressSettings = () => {
+    const saveAddressSettings = async () => {
         if (userRole !== 'admin') {
             showToast("⚠️ Solo l'amministratore del gruppo può modificare l'indirizzo condiviso.", 'error')
             setIsEditingAddress(false)
@@ -318,18 +323,33 @@ export default function Dashboard() {
         if (!clean) return
         setFamilyAddress(clean)
         if (userPlanId && typeof window !== 'undefined') {
-            localStorage.setItem(`spotishare_address_${userPlanId}`, clean)
-            if (settingsChannelRef.current) {
-                settingsChannelRef.current.send({
-                    type: 'broadcast',
-                    event: 'settings_update',
-                    payload: { familyAddress: clean }
-                }).catch(console.warn)
+            try {
+                const res = await fetch('/api/plan/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        planId: userPlanId,
+                        familyAddress: clean
+                    })
+                })
+                const data = await res.json()
+                if (!data.success) throw new Error(data.message || data.error)
+
+                localStorage.setItem(`spotishare_address_${userPlanId}`, clean)
+                if (settingsChannelRef.current) {
+                    settingsChannelRef.current.send({
+                        type: 'broadcast',
+                        event: 'settings_update',
+                        payload: { timestamp: Date.now() }
+                    }).catch(console.warn)
+                }
+                showToast('📍 Indirizzo Spotify Family salvato!', 'success')
+            } catch (err: any) {
+                showToast('Errore nel salvataggio: ' + err.message, 'error')
             }
         }
         setIsEditingAddress(false)
         setAddressInput('')
-        showToast('📍 Indirizzo Spotify Family salvato!', 'success')
     }
 
     // --- LOGICA PLAYLIST HUB ---
@@ -355,7 +375,7 @@ export default function Dashboard() {
         }
     }
 
-    const saveCustomPlaylist = (newUrl?: string) => {
+    const saveCustomPlaylist = async (newUrl?: string) => {
         const targetUrl = newUrl || customPlaylistInput.trim()
         if (!targetUrl) return
         let finalUrl = targetUrl
@@ -364,18 +384,33 @@ export default function Dashboard() {
         }
         setPlaylistUrl(finalUrl)
         if (userPlanId && typeof window !== 'undefined') {
-            localStorage.setItem(`spotishare_playlist_${userPlanId}`, finalUrl)
-            if (settingsChannelRef.current) {
-                settingsChannelRef.current.send({
-                    type: 'broadcast',
-                    event: 'settings_update',
-                    payload: { playlistUrl: finalUrl }
-                }).catch(console.warn)
+            try {
+                const res = await fetch('/api/plan/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        planId: userPlanId,
+                        playlistUrl: finalUrl
+                    })
+                })
+                const data = await res.json()
+                if (!data.success) throw new Error(data.message || data.error)
+
+                localStorage.setItem(`spotishare_playlist_${userPlanId}`, finalUrl)
+                if (settingsChannelRef.current) {
+                    settingsChannelRef.current.send({
+                        type: 'broadcast',
+                        event: 'settings_update',
+                        payload: { timestamp: Date.now() }
+                    }).catch(console.warn)
+                }
+                showToast('🎵 Playlist condivisa aggiornata!', 'success')
+            } catch (err: any) {
+                showToast('Errore nel salvataggio: ' + err.message, 'error')
             }
         }
         setIsEditingPlaylist(false)
         setCustomPlaylistInput('')
-        showToast('🎵 Playlist condivisa aggiornata!', 'success')
     }
 
     // --- LOGICA DEL COUNTER (SCADENZA AL 24) ---
@@ -622,27 +657,19 @@ export default function Dashboard() {
     const createPlan = async (cost: number, maxMembers: number) => {
         try {
             setIsPaying(true);
-            const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-            const { data: planData, error: planError } = await supabase
-                .from('plans')
-                .insert({
-                    name: user?.user_metadata?.full_name ? user.user_metadata.full_name + ' Gruppo' : 'Il Mio Gruppo',
-                    monthly_cost: cost,
-                    max_members: maxMembers,
-                    invite_code: inviteCode
+            const res = await fetch('/api/plan/admin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'create_plan',
+                    monthlyCost: cost,
+                    maxMembers
                 })
-                .select()
-                .single();
+            });
+            const result = await res.json();
+            if (!result.success) throw new Error(result.message || result.error);
 
-            if (planError) throw planError;
-
-            const { error: userError } = await supabase
-                .from('users')
-                .update({ plan_id: planData.id, role: 'admin' })
-                .eq('id', user.id);
-
-            if (userError) throw userError;
-
+            const planData = result.plan;
             showToast("🚀 Gruppo creato con successo!", 'success');
             triggerConfetti();
             setUserPlanId(planData.id);
@@ -757,13 +784,24 @@ export default function Dashboard() {
             title: "Annulla Pagamento",
             message: "Sei sicuro di voler eliminare questo incasso? L'operazione rimuoverà il pagamento dallo storico.",
             action: async () => {
-                const { error } = await supabase.from('payments').delete().eq('id', paymentId)
-                if (!error) {
+                try {
+                    const res = await fetch('/api/plan/admin', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'delete_payment',
+                            planId: userPlanId,
+                            paymentId
+                        })
+                    })
+                    const result = await res.json()
+                    if (!result.success) throw new Error(result.message || result.error)
+
                     showToast("🗑️ Pagamento eliminato", 'success')
                     fetchPayments(user.id)
                     if (userRole === 'admin') fetchAllGroupPayments(userPlanId!)
-                } else {
-                    showToast("Errore nell'eliminazione", 'error')
+                } catch (err: any) {
+                    showToast("Errore nell'eliminazione: " + err.message, 'error')
                 }
                 setConfirmModal(null)
             }
@@ -776,14 +814,19 @@ export default function Dashboard() {
             return
         }
         try {
-            const { error } = await supabase
-                .from('plans')
-                .update({
-                    monthly_cost: parseFloat(planCost),
-                    max_members: parseInt(planMaxMembers)
+            const res = await fetch('/api/plan/admin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'update_plan',
+                    planId: userPlanId,
+                    monthlyCost: parseFloat(planCost),
+                    maxMembers: parseInt(planMaxMembers)
                 })
-                .eq('id', userPlanId);
-            if (error) throw error;
+            })
+            const result = await res.json()
+            if (!result.success) throw new Error(result.message || result.error)
+
             showToast("Piano aggiornato con successo!", "success");
             const { data: plansData } = await supabase.from('plans').select('*');
             if (plansData) setPlans(plansData);
@@ -804,19 +847,27 @@ export default function Dashboard() {
             message: 'Sei sicuro di voler rimuovere ' + memberName + ' dal gruppo? L\'utente non avrà più accesso alla dashboard del gruppo.',
             action: async () => {
                 setIsPaying(true)
-                const { error } = await supabase
-                    .from('users')
-                    .update({ plan_id: null })
-                    .eq('id', memberId)
+                try {
+                    const res = await fetch('/api/plan/admin', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'remove_member',
+                            planId: userPlanId,
+                            memberId
+                        })
+                    })
+                    const result = await res.json()
+                    if (!result.success) throw new Error(result.message || result.error)
 
-                if (!error) {
                     showToast(memberName + ' rimosso dal gruppo', 'success')
                     fetchGroupMembers(userPlanId!)
-                } else {
-                    showToast("Errore durante la rimozione: " + error.message, 'error')
+                } catch (err: any) {
+                    showToast("Errore durante la rimozione: " + err.message, 'error')
+                } finally {
+                    setIsPaying(false)
+                    setConfirmModal(null)
                 }
-                setIsPaying(false)
-                setConfirmModal(null)
             }
         })
     }

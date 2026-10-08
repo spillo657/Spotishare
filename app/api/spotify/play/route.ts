@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase-server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function POST(request: NextRequest) {
   try {
+    // 1. Verify that the request comes from an authenticated SpotiShare user
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({
+        success: false,
+        error: 'UNAUTHORIZED',
+        message: 'Non autorizzato. Effettua l\'accesso a SpotiShare.'
+      }, { status: 401 });
+    }
+
     const tokenFromCookie = request.cookies.get('spotify_provider_token')?.value;
     const authHeader = request.headers.get('authorization');
     const tokenFromHeader = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
@@ -32,6 +45,16 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Validate Spotify URI format for defense-in-depth
+    const validUris = targetUris.filter((u: any) => typeof u === 'string' && (u.startsWith('spotify:track:') || u.startsWith('spotify:episode:')));
+    if (validUris.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'INVALID_URI',
+        message: 'Formato URI Spotify non valido'
+      }, { status: 400 });
+    }
+
     const spotifyRes = await fetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
       headers: {
@@ -39,8 +62,8 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        uris: targetUris,
-        position_ms: position_ms || 0
+        uris: validUris,
+        position_ms: typeof position_ms === 'number' && position_ms >= 0 ? position_ms : 0
       })
     });
 
