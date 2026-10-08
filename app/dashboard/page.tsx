@@ -342,7 +342,7 @@ export default function Dashboard() {
                     .eq('id', memberId)
 
                 if (!error) {
-                    showToast(\`\${memberName} rimosso dal gruppo\`, 'success')
+                    showToast(memberName + ' rimosso dal gruppo', 'success')
                     fetchGroupMembers(userPlanId!)
                 } else {
                     showToast("Errore durante la rimozione: " + error.message, 'error')
