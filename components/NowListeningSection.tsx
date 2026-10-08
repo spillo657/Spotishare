@@ -37,7 +37,7 @@ export interface MemberActivity {
   device: string;
 }
 
-// Authentic, verified high-resolution Spotify album covers
+// Authentic verified catalogue covers
 const DEFAULT_TRACK_CATALOG: TrackData[] = [
   {
     id: 'sfera-calcolatrici',
@@ -184,7 +184,7 @@ export default function NowListeningSection({
   const [customSongArtist, setCustomSongArtist] = useState('');
   const [startImmediatelyOnSelect, setStartImmediatelyOnSelect] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [spotifyToken, setSpotifyToken] = useState<string | null>(null);
+
   const [isLiveSpotifyConnected, setIsLiveSpotifyConnected] = useState<boolean>(false);
   const [isSyncingPlayer, setIsSyncingPlayer] = useState<boolean>(false);
 
@@ -192,7 +192,7 @@ export default function NowListeningSection({
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Storage key with clean versioning
-  const storageKey = `spotishare_listening_v8_${planId || 'default'}`;
+  const storageKey = `spotishare_listening_v9_${planId || 'default'}`;
 
   // Helper to check if a member is the current user
   const checkIsSelf = useCallback((member: Member, index: number): boolean => {
@@ -203,105 +203,63 @@ export default function NowListeningSection({
     return false;
   }, [currentUser]);
 
-  // Retrieve Spotify OAuth token from Supabase session
-  useEffect(() => {
-    const fetchSessionToken = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.provider_token) {
-          setSpotifyToken(session.provider_token);
-          setIsLiveSpotifyConnected(true);
-        }
-      } catch (e) {
-        console.warn('Error reading Spotify session token:', e);
-      }
-    };
-    fetchSessionToken();
-  }, []);
-
-  // Poll Real Spotify Web API to get the EXACT song currently playing on the user's Spotify device
-  const pollRealSpotifyPlayback = useCallback(async (token: string) => {
-    if (!token) return;
+  // Real-time Spotify API polling via server route
+  const pollServerSpotifyStatus = useCallback(async () => {
     try {
-      const res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const res = await fetch('/api/spotify/current', { cache: 'no-store' });
+      if (!res.ok) return;
 
-      if (res.status === 204 || res.status === 202) {
-        // Spotify is paused / no track currently active
-        setActivities(prev => prev.map(act => {
-          if (act.isSelf) {
-            return {
-              ...act,
-              isPlaying: false,
-              lastPlayedText: 'Musica in pausa su Spotify',
-              progressSec: 0
-            };
-          }
-          return act;
-        }));
-        return;
-      }
+      const data = await res.json();
 
-      if (res.status === 401) {
-        // Token expired
-        setSpotifyToken(null);
-        setIsLiveSpotifyConnected(false);
-        return;
-      }
+      if (data.connected === true) {
+        setIsLiveSpotifyConnected(true);
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.item) {
-          const item = data.item;
-          const liveTrack: TrackData = {
-            id: item.id || `spotify-${Date.now()}`,
-            title: item.name,
-            artist: item.artists?.map((a: any) => a.name).join(', ') || 'Artista Spotify',
-            album: item.album?.name || 'Album Spotify',
-            durationSec: Math.floor((item.duration_ms || 180000) / 1000),
-            coverUrl: item.album?.images?.[0]?.url || DEFAULT_FALLBACK_COVER,
-            spotifyUrl: item.external_urls?.spotify || `https://open.spotify.com/track/${item.id}`,
-            genre: 'Spotify Live',
-            audioTheme: 'energetic'
-          };
-
-          const isPlayingLive = Boolean(data.is_playing);
-          const progressLiveSec = Math.floor((data.progress_ms || 0) / 1000);
-
+        if (data.is_playing && data.track) {
+          // Spotify is actively playing a real song
           setActivities(prev => prev.map(act => {
             if (act.isSelf) {
               return {
                 ...act,
-                isPlaying: isPlayingLive,
-                track: liveTrack,
-                progressSec: progressLiveSec,
-                lastPlayedText: isPlayingLive ? 'In ascolto ora (Spotify Live)' : 'Musica in pausa su Spotify',
-                device: 'Spotify Live Player'
+                isPlaying: true,
+                track: data.track,
+                progressSec: data.progressSec || 0,
+                lastPlayedText: 'In ascolto ora (Spotify Live)',
+                device: data.device || 'Spotify Device'
+              };
+            }
+            return act;
+          }));
+        } else {
+          // Spotify is stopped or paused
+          setActivities(prev => prev.map(act => {
+            if (act.isSelf) {
+              return {
+                ...act,
+                isPlaying: false,
+                lastPlayedText: 'Musica in pausa su Spotify',
+                progressSec: 0
               };
             }
             return act;
           }));
         }
+      } else {
+        // Not connected or token expired
+        setIsLiveSpotifyConnected(false);
       }
     } catch (err) {
-      console.warn('Real Spotify polling error:', err);
+      console.warn('Error polling /api/spotify/current:', err);
     }
   }, []);
 
-  // Poll Spotify every 4 seconds when token is active
+  // Poll Spotify status on mount and periodically
   useEffect(() => {
-    if (!spotifyToken) return;
-    pollRealSpotifyPlayback(spotifyToken);
-    const interval = setInterval(() => {
-      pollRealSpotifyPlayback(spotifyToken);
-    }, 4000);
+    pollServerSpotifyStatus();
+    const interval = setInterval(pollServerSpotifyStatus, 3500);
     return () => clearInterval(interval);
-  }, [spotifyToken, pollRealSpotifyPlayback]);
+  }, [pollServerSpotifyStatus]);
 
-  // Connect Spotify OAuth with playback scopes
+  // Direct Spotify OAuth re-connect action
   const handleConnectSpotifyLive = async () => {
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -317,7 +275,7 @@ export default function NowListeningSection({
         window.location.href = data.url;
       }
     } catch (err: any) {
-      showToast('Errore imprevisto: ' + err.message, 'error');
+      showToast('Errore: ' + err.message, 'error');
     }
   };
 
@@ -339,7 +297,6 @@ export default function NowListeningSection({
       const isSelf = checkIsSelf(member, index);
       const cached = savedState[member.id];
 
-      // If user had a cached track with valid URL, restore their exact preference
       if (
         cached &&
         cached.track &&
@@ -359,7 +316,7 @@ export default function NowListeningSection({
         };
       }
 
-      // If this is the current user ("Tu"), default to Sfera Ebbasta / paused so we don't show wrong Sabrina Carpenter
+      // Default for current user ("Tu"): Sfera Ebbasta / Paused
       if (isSelf) {
         const defaultUserTrack = DEFAULT_TRACK_CATALOG[0]; // Sfera Ebbasta
         return {
@@ -375,7 +332,7 @@ export default function NowListeningSection({
         };
       }
 
-      // Default assignment for other group members
+      // Group members default tracks
       const track = DEFAULT_TRACK_CATALOG[(index + 1) % DEFAULT_TRACK_CATALOG.length];
       const isPlaying = index % 3 !== 2;
       const initialProgress = Math.floor(Math.random() * (track.durationSec - 40)) + 20;
@@ -396,7 +353,7 @@ export default function NowListeningSection({
     setActivities(newActivities);
   }, [members, currentUser, planId, storageKey, checkIsSelf]);
 
-  // Timer to advance progress bars smoothly ONLY for actively playing tracks
+  // Smooth progress advance only for playing tracks
   useEffect(() => {
     const interval = setInterval(() => {
       setActivities((prev) =>
@@ -439,10 +396,9 @@ export default function NowListeningSection({
     }
   };
 
-  // Find the current logged-in user activity
   const myActivity = activities.find((a) => a.isSelf) || activities[0];
 
-  // REAL SPOTIFY SYNC: Send playback command to user's Spotify device and open Spotify player
+  // REAL SPOTIFY SYNC: Commands real Spotify player & opens song on device
   const handleSyncWithMember = async (targetMember: MemberActivity) => {
     if (onTriggerConfetti) onTriggerConfetti();
     setIsSyncingPlayer(true);
@@ -452,42 +408,37 @@ export default function NowListeningSection({
       : targetMember.track.id;
     const trackUri = `spotify:track:${trackId}`;
 
-    let playedDirectlyOnDevice = false;
+    let playedViaApi = false;
 
-    // 1. If Spotify OAuth token is available, command Spotify API to play on active device
-    if (spotifyToken) {
-      try {
-        const playRes = await fetch('https://api.spotify.com/v1/me/player/play', {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${spotifyToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            uris: [trackUri],
-            position_ms: Math.max(0, (targetMember.progressSec || 0) * 1000)
-          })
-        });
+    // 1. Send play command to backend API proxy
+    try {
+      const res = await fetch('/api/spotify/play', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uri: trackUri,
+          position_ms: Math.max(0, (targetMember.progressSec || 0) * 1000)
+        })
+      });
 
-        if (playRes.status === 204 || playRes.ok) {
-          playedDirectlyOnDevice = true;
-          showToast(`🎵 Brano avviato sul tuo dispositivo Spotify: "${targetMember.track.title}"!`, 'success');
-        } else if (playRes.status === 404) {
-          // No active device found
-          showToast('Nessun dispositivo Spotify attivo trovato. Apertura Spotify in corso...', 'info');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          playedViaApi = true;
+          showToast(`🎵 Brano avviato sul tuo Spotify: "${targetMember.track.title}"!`, 'success');
         }
-      } catch (e) {
-        console.warn('Spotify Web API play error:', e);
       }
+    } catch (e) {
+      console.warn('API Play error:', e);
     }
 
-    // 2. Open Spotify directly (deep link & web URL) to ensure playback starts on user app/device
-    if (!playedDirectlyOnDevice) {
+    // 2. Open Spotify directly if not played via API
+    if (!playedViaApi) {
       window.open(targetMember.track.spotifyUrl, '_blank');
-      showToast(`🎵 Sincronizzazione: apertura di "${targetMember.track.title}" nel tuo Spotify!`, 'success');
+      showToast(`🎵 Sincronizzazione: apertura "${targetMember.track.title}" su Spotify...`, 'success');
     }
 
-    // 3. Update dashboard UI
+    // 3. Update dashboard state
     setActivities((prev) => {
       const updated = prev.map((act) => {
         if (act.isSelf) {
@@ -509,18 +460,12 @@ export default function NowListeningSection({
     setIsSyncingPlayer(false);
   };
 
-  // Micro-action: Stop/Pause current user playback
+  // Pause playback
   const handlePauseMyPlayback = async () => {
-    // If Spotify token exists, pause on real Spotify device too
-    if (spotifyToken) {
-      try {
-        await fetch('https://api.spotify.com/v1/me/player/pause', {
-          method: 'PUT',
-          headers: { 'Authorization': `Bearer ${spotifyToken}` }
-        });
-      } catch (e) {
-        console.warn(e);
-      }
+    try {
+      await fetch('/api/spotify/pause', { method: 'POST' });
+    } catch (e) {
+      console.warn(e);
     }
 
     setActivities((prev) => {
@@ -540,22 +485,17 @@ export default function NowListeningSection({
     showToast('Hai messo in pausa la musica ⏸️', 'info');
   };
 
-  // Micro-action: Resume/Play current user playback
+  // Resume playback
   const handlePlayMyPlayback = async () => {
-    if (spotifyToken && myActivity?.track) {
+    if (myActivity?.track) {
       const trackId = myActivity.track.spotifyUrl.includes('/track/')
         ? myActivity.track.spotifyUrl.split('/track/')[1].split('?')[0]
         : myActivity.track.id;
       try {
-        await fetch('https://api.spotify.com/v1/me/player/play', {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${spotifyToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            uris: [`spotify:track:${trackId}`]
-          })
+        await fetch('/api/spotify/play', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uri: `spotify:track:${trackId}` })
         });
       } catch (e) {
         console.warn(e);
@@ -579,7 +519,7 @@ export default function NowListeningSection({
     showToast('Riproduzione avviata per il tuo profilo SpotiShare ▶️', 'success');
   };
 
-  // Micro-action: Reset current user playback completely
+  // Reset playback
   const handleStopMyPlayback = () => {
     setActivities((prev) => {
       const updated = prev.map((act) => {
@@ -599,7 +539,7 @@ export default function NowListeningSection({
     showToast('Musica fermata e avanzamento azzerato ⏹️', 'info');
   };
 
-  // Micro-action: Toggle Play/Pause on any row
+  // Toggle play/pause for a member row
   const handleTogglePlay = (memberId: string) => {
     setActivities((prev) => {
       const updated = prev.map((act) => {
@@ -618,7 +558,7 @@ export default function NowListeningSection({
     });
   };
 
-  // Micro-action: Web Audio Synth Preview
+  // Synthesizer preview
   const handlePlaySoundPreview = (member: MemberActivity) => {
     if (previewingMemberId === member.memberId) {
       if (audioContextRef.current) {
@@ -685,7 +625,7 @@ export default function NowListeningSection({
     }
   };
 
-  // Change active song for current user
+  // Change current user track
   const handleSelectTrackForSelf = (track: TrackData, makeActive: boolean = false) => {
     setActivities((prev) => {
       const updated = prev.map((act) => {
@@ -714,7 +654,6 @@ export default function NowListeningSection({
     if (onTriggerConfetti) onTriggerConfetti();
   };
 
-  // Custom song submission
   const handleSetCustomSong = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customSongTitle.trim()) return;
@@ -751,10 +690,10 @@ export default function NowListeningSection({
 
   return (
     <div className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 sm:p-7 shadow-2xl ring-1 ring-white/5 relative overflow-hidden transition-all">
-      {/* Subtle Ambient Emerald Glow */}
+      {/* Ambient Emerald Glow */}
       <div className="absolute top-0 right-0 w-80 h-80 bg-[#1DB954]/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* HEADER DELLA TABELLA MUSICA SPOTIFY */}
+      {/* HEADER */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-white/10">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -771,9 +710,14 @@ export default function NowListeningSection({
                 Spotify Live Connesso
               </span>
             ) : (
-              <span className="text-[10px] uppercase font-black tracking-wider bg-zinc-800 text-zinc-400 border border-white/10 px-3 py-1 rounded-full">
-                Group Activity
-              </span>
+              <button
+                onClick={handleConnectSpotifyLive}
+                className="text-[10px] uppercase font-black tracking-wider bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3 py-1 rounded-full transition-all flex items-center gap-1.5"
+                title="Clicca per collegare Spotify reale con i permessi di lettura/riproduzione"
+              >
+                <span>⚠️</span>
+                <span>Collega Spotify Live</span>
+              </button>
             )}
           </div>
           <p className="text-xs text-zinc-400 mt-1">
@@ -781,14 +725,13 @@ export default function NowListeningSection({
           </p>
         </div>
 
-        {/* CONTROLLI: FILTRO E MODIFICA BRANO */}
+        {/* CONTROLS */}
         <div className="flex items-center gap-3 flex-wrap shrink-0">
-          {/* Live Connect Button if not authorized */}
           {!isLiveSpotifyConnected && (
             <button
               onClick={handleConnectSpotifyLive}
               className="inline-flex items-center gap-1.5 bg-[#1DB954]/15 hover:bg-[#1DB954]/25 text-[#1DB954] border border-[#1DB954]/40 text-xs font-black px-3.5 py-2 rounded-2xl transition-all active:scale-95 shadow-sm"
-              title="Connetti il tuo account Spotify reale per rilevare automaticamente cosa stai ascoltando"
+              title="Connetti il tuo account Spotify reale"
             >
               <span>🔗</span>
               <span>Connetti Spotify Live</span>
@@ -841,7 +784,7 @@ export default function NowListeningSection({
         </div>
       </div>
 
-      {/* DEDICATED CONTROL BAR PER L'UTENTE ("TU") */}
+      {/* USER DEDICATED CONTROL BAR */}
       {myActivity && (
         <div className="mt-5 p-4 bg-gradient-to-r from-[#1DB954]/10 via-black/40 to-black/40 border border-[#1DB954]/30 rounded-2xl sm:rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5 min-w-0">
@@ -886,13 +829,13 @@ export default function NowListeningSection({
             </div>
           </div>
 
-          {/* User Quick Controls */}
+          {/* Quick Buttons */}
           <div className="flex items-center gap-2 flex-wrap shrink-0">
             {myActivity.isPlaying ? (
               <button
                 onClick={handlePauseMyPlayback}
                 className="inline-flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm"
-                title="Metti in pausa il tuo stato di ascolto"
+                title="Metti in pausa la musica"
               >
                 <span>⏸️</span>
                 <span>Metti in Pausa</span>
@@ -928,7 +871,7 @@ export default function NowListeningSection({
         </div>
       )}
 
-      {/* TABELLA TRACKLIST SPOTTIFY CON COPERTINE UFFICIALI E LAYOUT AMPIO */}
+      {/* TRACKLIST TABLE */}
       <div className="mt-6">
         {filteredActivities.length === 0 ? (
           <div className="py-12 text-center bg-black/20 border border-white/5 rounded-3xl">
@@ -942,7 +885,7 @@ export default function NowListeningSection({
           </div>
         ) : (
           <div className="space-y-3">
-            {/* INTESTAZIONE TABELLA DESKTOP */}
+            {/* TABLE HEADER */}
             <div className="hidden lg:grid grid-cols-12 gap-4 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-500 border-b border-white/5">
               <div className="col-span-1 text-center">#</div>
               <div className="col-span-4">Brano & Artista</div>
@@ -951,8 +894,8 @@ export default function NowListeningSection({
               <div className="col-span-2 text-right">Azioni</div>
             </div>
 
-            {/* RIGHE BRANI ASCOLTATI */}
-            {filteredActivities.map((act, index) => {
+            {/* ROWS */}
+            {filteredActivities.map((act) => {
               const progressPercent = Math.min(
                 100,
                 Math.max(0, (act.progressSec / act.track.durationSec) * 100)
@@ -970,7 +913,7 @@ export default function NowListeningSection({
                       : 'border-white/5 hover:border-white/15'
                   } rounded-2xl sm:rounded-3xl transition-all duration-200 flex flex-col lg:grid lg:grid-cols-12 gap-4 lg:items-center`}
                 >
-                  {/* COLONNA 1: NUMERO / EQUALIZZATORE ANIMATO */}
+                  {/* COL 1: EQUALIZER */}
                   <div className="hidden lg:flex lg:col-span-1 items-center justify-center text-zinc-400 text-xs font-mono font-bold">
                     {act.isPlaying ? (
                       <div className="flex items-end gap-[2px] h-4 w-4" title="In riproduzione">
@@ -984,9 +927,8 @@ export default function NowListeningSection({
                     )}
                   </div>
 
-                  {/* COLONNA 2: COPERTINA REALE + TITOLO/ARTISTA/ALBUM */}
+                  {/* COL 2: ALBUM COVER & TRACK INFO */}
                   <div className="lg:col-span-4 flex items-center gap-3.5 min-w-0">
-                    {/* Square Official Album Cover */}
                     <div className="relative w-14 h-14 shrink-0 rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 group-hover:scale-105 transition-transform">
                       <img
                         src={act.track.coverUrl}
@@ -1023,7 +965,7 @@ export default function NowListeningSection({
                     </div>
                   </div>
 
-                  {/* COLONNA 3: MEMBRO CHE ASCOLTA & DISPOSITIVO */}
+                  {/* COL 3: MEMBER & DEVICE */}
                   <div className="lg:col-span-3 flex items-center gap-3 min-w-0">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-white/15 to-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-white shrink-0 shadow-inner">
                       {act.memberName.charAt(0).toUpperCase()}
@@ -1043,7 +985,7 @@ export default function NowListeningSection({
                     </div>
                   </div>
 
-                  {/* COLONNA 4: BARRA DI AVANZAMENTO & STATO */}
+                  {/* COL 4: PROGRESS BAR */}
                   <div className="lg:col-span-2 min-w-0">
                     {act.isPlaying ? (
                       <div className="space-y-1.5">
@@ -1067,9 +1009,9 @@ export default function NowListeningSection({
                     )}
                   </div>
 
-                  {/* COLONNA 5: AZIONI RAPIDE */}
+                  {/* COL 5: ACTIONS */}
                   <div className="lg:col-span-2 flex items-center justify-end gap-2 flex-wrap">
-                    {/* Sync / Ascolta Insieme (Sends real command to user's Spotify device!) */}
+                    {/* Sync / Ascolta Insieme */}
                     {!act.isSelf && (
                       <button
                         onClick={() => handleSyncWithMember(act)}
@@ -1082,7 +1024,7 @@ export default function NowListeningSection({
                       </button>
                     )}
 
-                    {/* Audio Preview Synth */}
+                    {/* Synth Preview */}
                     <button
                       onClick={() => handlePlaySoundPreview(act)}
                       className={`p-1.5 sm:px-2.5 sm:py-1.5 border text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center gap-1 ${
@@ -1095,7 +1037,7 @@ export default function NowListeningSection({
                       <span>{isPreviewing ? '🔊' : '🎵'}</span>
                     </button>
 
-                    {/* Play/Pause Toggle for this user */}
+                    {/* Play/Pause Toggle */}
                     <button
                       onClick={() => handleTogglePlay(act.memberId)}
                       className={`p-1.5 border rounded-xl transition-all text-xs ${
@@ -1129,11 +1071,10 @@ export default function NowListeningSection({
         )}
       </div>
 
-      {/* MODALE DI SELEZIONE BRANO CON RICERCA, COPERTINE REALI E TOGGLE STATO */}
+      {/* SONG PICKER MODAL */}
       {showSongPickerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
           <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl max-w-lg w-full relative overflow-hidden ring-1 ring-white/10 max-h-[90vh] flex flex-col justify-between">
-            {/* Emerald Header Accent */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-emerald-400" />
 
             <div>
@@ -1154,7 +1095,7 @@ export default function NowListeningSection({
                 </button>
               </div>
 
-              {/* Quick Actions: Stop/Pause directly */}
+              {/* Quick Pause Action */}
               <div className="flex items-center gap-2 mb-4 p-2.5 bg-white/5 border border-white/10 rounded-2xl">
                 <span className="text-[11px] text-zinc-300 flex-grow font-medium">
                   Musica fermata su Spotify?
@@ -1181,7 +1122,7 @@ export default function NowListeningSection({
                 />
               </div>
 
-              {/* Verified Catalogue List */}
+              {/* Verified Catalogue */}
               <div className="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar mb-4">
                 {DEFAULT_TRACK_CATALOG.filter(
                   (t) =>
@@ -1218,7 +1159,7 @@ export default function NowListeningSection({
                 ))}
               </div>
 
-              {/* Custom Track Input Form */}
+              {/* Custom Track Form */}
               <form
                 onSubmit={handleSetCustomSong}
                 className="p-3 bg-black/40 border border-white/10 rounded-2xl space-y-2"
