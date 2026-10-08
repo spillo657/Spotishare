@@ -304,15 +304,29 @@ export default function NowListeningSection({
         setActivities((prev) =>
           prev.map((act) => {
             if (act.memberId === data.memberId) {
-              const isPlaying = Boolean(data.isPlaying) && data.track?.id !== 'none';
-              return {
-                ...act,
-                track: isPlaying && data.track ? data.track : NO_TRACK,
-                isPlaying,
-                progressSec: isPlaying ? data.progressSec || 0 : 0,
-                lastPlayedText: isPlaying ? 'In ascolto ora' : 'Nessun brano in esecuzione',
-                device: data.device || act.device
-              };
+              const isPlaying = Boolean(data.isPlaying) && data.track?.id && data.track.id !== 'none';
+              if (isPlaying && data.track) {
+                return {
+                  ...act,
+                  track: data.track,
+                  isPlaying: true,
+                  progressSec: data.progressSec || 0,
+                  lastPlayedText: 'In ascolto ora',
+                  device: data.device || act.device
+                };
+              }
+              // Explicit pause / stop from broadcast
+              if (data.isPlaying === false) {
+                return {
+                  ...act,
+                  track: NO_TRACK,
+                  isPlaying: false,
+                  progressSec: 0,
+                  lastPlayedText: 'Nessun brano in esecuzione',
+                  device: data.device || act.device
+                };
+              }
+              return act;
             }
             return act;
           })
@@ -337,15 +351,19 @@ export default function NowListeningSection({
                 setActivities((prev) =>
                   prev.map((act) => {
                     if (act.memberId === p.memberId) {
-                      const isPlaying = Boolean(p.isPlaying) && p.track?.id !== 'none';
-                      return {
-                        ...act,
-                        track: isPlaying && p.track ? p.track : NO_TRACK,
-                        isPlaying,
-                        progressSec: isPlaying ? p.progressSec || 0 : 0,
-                        lastPlayedText: isPlaying ? 'In ascolto ora' : 'Nessun brano in esecuzione',
-                        device: p.device || act.device
-                      };
+                      const isIncomingActive = Boolean(p.isPlaying) && p.track && p.track.id !== 'none';
+                      if (isIncomingActive) {
+                        return {
+                          ...act,
+                          track: p.track,
+                          isPlaying: true,
+                          progressSec: p.progressSec || 0,
+                          lastPlayedText: 'In ascolto ora',
+                          device: p.device || act.device
+                        };
+                      }
+                      // Never overwrite an existing active track with an empty/default one on presence sync
+                      return act;
                     }
                     return act;
                   })
@@ -442,7 +460,7 @@ export default function NowListeningSection({
       if (data.connected === true) {
         setIsLiveSpotifyConnected(true);
 
-        if (data.is_playing && data.track) {
+        if (data.is_playing && data.track && data.track.id !== 'none') {
           // Live Spotify playback detected!
           lastManualTrackSetRef.current = null; // Clear manual lock as real audio stream is verified
 
@@ -467,13 +485,15 @@ export default function NowListeningSection({
 
         } else {
           // Spotify is stopped or paused on server
-          // If the user recently selected a track manually on SpotiShare, preserve it instead of wiping it after 2s!
-          const hasManualLock = lastManualTrackSetRef.current && (Date.now() - lastManualTrackSetRef.current.timestamp < 120000);
+          // If the user has manually selected a track or has an active track, preserve it!
+          // We do not wipe it unless explicit pause occurred.
+          const hasManualLock = Boolean(lastManualTrackSetRef.current);
 
           if (!hasManualLock) {
+            // Only clear if the self activity is explicitly without track or inactive
             setActivities((prev) =>
               prev.map((act) => {
-                if (act.isSelf && act.isPlaying) {
+                if (act.isSelf && act.isPlaying && (!act.track || act.track.id === 'none')) {
                   return {
                     ...act,
                     isPlaying: false,
@@ -485,10 +505,6 @@ export default function NowListeningSection({
                 return act;
               })
             );
-
-            if (myCurrentStateRef.current?.isPlaying) {
-              broadcastMyState(NO_TRACK, false, 0, 'Spotify');
-            }
           }
         }
       } else {
@@ -598,19 +614,28 @@ export default function NowListeningSection({
             ...existing,
             memberName: member.name || existing.memberName,
             memberEmail: member.email || existing.memberEmail,
-            isSelf
+            isSelf,
+            isPlaying: existing.isPlaying,
+            track: existing.track && existing.track.id !== 'none' ? existing.track : existing.track,
+            progressSec: existing.progressSec,
+            lastPlayedText: existing.lastPlayedText,
+            device: existing.device
           };
         }
+
+        const selfState = isSelf && myCurrentStateRef.current && myCurrentStateRef.current.track.id !== 'none'
+          ? myCurrentStateRef.current
+          : null;
 
         return {
           memberId: member.id,
           memberName: member.name || (isSelf ? 'Tu' : `Membro #${index + 1}`),
           memberEmail: member.email || '',
           isSelf,
-          isPlaying: false,
-          track: NO_TRACK,
-          progressSec: 0,
-          lastPlayedText: 'Nessun brano in esecuzione',
+          isPlaying: selfState ? selfState.isPlaying : false,
+          track: selfState ? selfState.track : NO_TRACK,
+          progressSec: selfState ? selfState.progressSec : 0,
+          lastPlayedText: selfState && selfState.isPlaying ? 'In ascolto ora' : 'Nessun brano in esecuzione',
           device: isSelf ? 'Spotify su iPhone' : DEVICES[index % DEVICES.length]
         };
       });
@@ -1507,18 +1532,18 @@ export default function NowListeningSection({
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 md:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150 overflow-hidden"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 md:p-6 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-150"
           onClick={() => setShowSongPickerModal(false)}
         >
           <div
-            className="bg-[#121218] border border-white/15 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[88vh] sm:max-h-[82vh] flex flex-col relative overflow-hidden ring-1 ring-white/10 my-auto"
+            className="w-full max-w-2xl max-h-[88vh] sm:max-h-[82vh] flex flex-col rounded-3xl bg-[#121218]/95 border border-white/15 shadow-2xl overflow-hidden relative ring-1 ring-white/10 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Emerald Top Accent */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-emerald-400 shrink-0" />
 
             {/* STICKY HEADER */}
-            <div className="p-4 sm:p-5 border-b border-white/10 shrink-0 bg-[#121218]/95 backdrop-blur-sm space-y-3">
+            <div className="sticky top-0 z-10 shrink-0 p-5 sm:p-6 pb-3 border-b border-white/10 bg-[#121218]/95 backdrop-blur-md space-y-3">
               <div className="flex justify-between items-start gap-3">
                 <div className="min-w-0">
                   <h3 className="text-lg sm:text-xl font-extrabold text-zinc-100 flex items-center gap-2 truncate">
@@ -1539,7 +1564,7 @@ export default function NowListeningSection({
               </div>
 
               {/* Quick Action: Reset to "Nessun brano in esecuzione" */}
-              <div className="p-2.5 sm:p-3 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between gap-3">
+              <div className="p-2.5 sm:p-3 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-zinc-200 truncate">Non stai ascoltando musica?</p>
                   <p className="text-[10px] sm:text-[11px] text-zinc-400 truncate">Imposta lo stato su &quot;Nessun brano in esecuzione&quot;.</p>
@@ -1557,11 +1582,11 @@ export default function NowListeningSection({
               </div>
 
               {/* Navigation Tabs */}
-              <div className="flex items-center gap-1.5 sm:gap-2 p-1 bg-black/60 rounded-2xl border border-white/10 text-xs">
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 p-1 bg-black/60 rounded-2xl border border-white/10 text-xs">
                 <button
                   type="button"
                   onClick={() => setModalTab('recent')}
-                  className={`flex-1 py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
+                  className={`py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
                     modalTab === 'recent'
                       ? 'bg-white/15 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
@@ -1573,7 +1598,7 @@ export default function NowListeningSection({
                 <button
                   type="button"
                   onClick={() => setModalTab('catalog')}
-                  className={`flex-1 py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
+                  className={`py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
                     modalTab === 'catalog'
                       ? 'bg-white/15 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
@@ -1585,7 +1610,7 @@ export default function NowListeningSection({
                 <button
                   type="button"
                   onClick={() => setModalTab('custom')}
-                  className={`flex-1 py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
+                  className={`py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
                     modalTab === 'custom'
                       ? 'bg-white/15 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
@@ -1598,7 +1623,7 @@ export default function NowListeningSection({
             </div>
 
             {/* SCROLLABLE BODY */}
-            <div className="p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto min-h-0 p-5 sm:p-6 space-y-4 overscroll-contain custom-scrollbar">
               {/* TAB 1: RECENT SPOTIFY TRACKS */}
               {modalTab === 'recent' && (
                 <div>
@@ -1810,11 +1835,21 @@ export default function NowListeningSection({
             </div>
 
             {/* STICKY FOOTER */}
-            <div className="p-3.5 sm:p-4 border-t border-white/10 bg-[#121218]/95 backdrop-blur-sm shrink-0 flex justify-end">
+            <div className="sticky bottom-0 z-10 shrink-0 p-4 sm:p-5 border-t border-white/10 bg-[#121218] flex justify-between items-center">
+              <div className="text-xs text-zinc-400 truncate mr-3 min-w-0">
+                {myActivity?.isPlaying && myActivity?.track?.id !== 'none' ? (
+                  <span className="flex items-center gap-1.5 text-emerald-400 font-semibold truncate">
+                    <span className="w-2 h-2 rounded-full bg-[#1DB954] animate-pulse shrink-0" />
+                    <span className="truncate">Attivo: {myActivity.track.title}</span>
+                  </span>
+                ) : (
+                  <span className="text-zinc-500">Nessun brano attivo</span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setShowSongPickerModal(false)}
-                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white font-bold rounded-xl text-xs transition-all active:scale-95 cursor-pointer"
+                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-zinc-200 hover:text-white font-bold rounded-xl text-xs transition-all active:scale-95 cursor-pointer shrink-0"
               >
                 Chiudi
               </button>
