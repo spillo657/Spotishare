@@ -14,8 +14,12 @@ export async function GET(request: NextRequest) {
         connected: false,
         is_playing: false,
         error: 'NO_TOKEN',
+        track: null,
         message: 'Nessun token Spotify trovato.'
-      }, { status: 200 });
+      }, {
+        status: 200,
+        headers: { 'Cache-Control': 'no-store, max-age=0' }
+      });
     }
 
     // 2. Fetch full player state from Spotify Web API
@@ -26,7 +30,7 @@ export async function GET(request: NextRequest) {
       cache: 'no-store'
     });
 
-    // If /me/player returns 204, also check /currently-playing as fallback
+    // If /me/player returns 204 or 202, check /currently-playing as fallback
     if (spotifyRes.status === 204 || spotifyRes.status === 202) {
       spotifyRes = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
         headers: {
@@ -37,13 +41,17 @@ export async function GET(request: NextRequest) {
     }
 
     if (spotifyRes.status === 204 || spotifyRes.status === 202) {
-      // 204: Spotify is idle / no active playback
+      // 204/202: Spotify is idle / no active playback
       return NextResponse.json({
         connected: true,
         is_playing: false,
-        status: 'paused',
-        message: 'Musica in pausa su Spotify'
-      }, { status: 200 });
+        status: 'idle',
+        track: null,
+        message: 'Nessun brano in esecuzione'
+      }, {
+        status: 200,
+        headers: { 'Cache-Control': 'no-store, max-age=0' }
+      });
     }
 
     if (spotifyRes.status === 401) {
@@ -52,20 +60,28 @@ export async function GET(request: NextRequest) {
         connected: false,
         is_playing: false,
         error: 'TOKEN_EXPIRED',
+        track: null,
         message: 'Token Spotify scaduto. Riconnetti Spotify.'
-      }, { status: 200 });
+      }, {
+        status: 200,
+        headers: { 'Cache-Control': 'no-store, max-age=0' }
+      });
     }
 
     if (spotifyRes.ok) {
       const data = await spotifyRes.json();
 
-      if (!data || !data.item) {
+      if (!data || !data.item || !data.is_playing) {
         return NextResponse.json({
           connected: true,
           is_playing: false,
           status: 'paused',
-          message: 'Musica in pausa su Spotify'
-        }, { status: 200 });
+          track: null,
+          message: 'Nessun brano in esecuzione'
+        }, {
+          status: 200,
+          headers: { 'Cache-Control': 'no-store, max-age=0' }
+        });
       }
 
       const item = data.item;
@@ -86,25 +102,37 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         connected: true,
-        is_playing: Boolean(data.is_playing),
+        is_playing: true,
         progressSec: Math.floor((data.progress_ms || 0) / 1000),
         track: trackData,
         device: data.device?.name ? `${data.device.name}` : 'Spotify Device'
-      }, { status: 200 });
+      }, {
+        status: 200,
+        headers: { 'Cache-Control': 'no-store, max-age=0' }
+      });
     }
 
     return NextResponse.json({
       connected: true,
       is_playing: false,
-      status: 'paused'
-    }, { status: 200 });
+      status: 'paused',
+      track: null,
+      message: 'Nessun brano in esecuzione'
+    }, {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store, max-age=0' }
+    });
 
   } catch (error: any) {
     console.error('Error in /api/spotify/current:', error);
     return NextResponse.json({
       connected: false,
       is_playing: false,
+      track: null,
       error: error.message
-    }, { status: 500 });
+    }, {
+      status: 500,
+      headers: { 'Cache-Control': 'no-store, max-age=0' }
+    });
   }
 }

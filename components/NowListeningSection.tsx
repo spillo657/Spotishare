@@ -13,7 +13,7 @@ export interface Member {
   [key: string]: any;
 }
 
-interface TrackData {
+export interface TrackData {
   id: string;
   title: string;
   artist: string;
@@ -39,8 +39,20 @@ export interface MemberActivity {
 
 const DEFAULT_FALLBACK_COVER = '/default-cover.svg';
 
-// Verified default catalogue with reliable artwork URLs
-const DEFAULT_TRACK_CATALOG: TrackData[] = [
+export const NO_TRACK: TrackData = {
+  id: 'none',
+  title: 'Nessun brano in esecuzione',
+  artist: 'Nessuna riproduzione attiva',
+  album: 'Inattivo',
+  durationSec: 0,
+  coverUrl: DEFAULT_FALLBACK_COVER,
+  spotifyUrl: 'https://open.spotify.com',
+  genre: 'Inattivo',
+  audioTheme: 'chill'
+};
+
+// Verified default catalogue with reliable artwork URLs and accurate metadata
+export const DEFAULT_TRACK_CATALOG: TrackData[] = [
   {
     id: 'sfera-calcolatrici',
     title: 'CALCOLATRICI (feat. Geolier, Baby Gang, Guè)',
@@ -179,23 +191,30 @@ export default function NowListeningSection({
   const [activities, setActivities] = useState<MemberActivity[]>([]);
   const [filterMode, setFilterMode] = useState<'all' | 'playing' | 'paused'>('all');
   const [previewingMemberId, setPreviewingMemberId] = useState<string | null>(null);
+
+  // Modal states
   const [showSongPickerModal, setShowSongPickerModal] = useState(false);
+  const [modalTab, setModalTab] = useState<'recent' | 'catalog' | 'custom'>('recent');
+  const [recentTracks, setRecentTracks] = useState<TrackData[]>([]);
+  const [isLoadingRecent, setIsLoadingRecent] = useState(false);
   const [customSongTitle, setCustomSongTitle] = useState('');
   const [customSongArtist, setCustomSongArtist] = useState('');
-  const [startImmediatelyOnSelect, setStartImmediatelyOnSelect] = useState(false);
+  const [startImmediatelyOnSelect, setStartImmediatelyOnSelect] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Live Spotify Connection State
   const [isLiveSpotifyConnected, setIsLiveSpotifyConnected] = useState<boolean>(false);
   const [isSyncingPlayer, setIsSyncingPlayer] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [clientSpotifyToken, setClientSpotifyToken] = useState<string | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Storage key bumped to v10 to purge any stale mock playback cache
-  const storageKey = `spotishare_listening_v10_${planId || 'default'}`;
+  // Storage key bumped to v11 to ensure completely clean slate
+  const storageKey = `spotishare_listening_v11_${planId || 'default'}`;
 
-  // Check if a member is the current user
+  // Helper to determine if a member is the current user
   const checkIsSelf = useCallback((member: Member, index: number): boolean => {
     if (currentUser?.id && member.id === currentUser.id) return true;
     if (currentUser?.email && member.email && member.email.toLowerCase() === currentUser.email.toLowerCase()) return true;
@@ -211,7 +230,6 @@ export default function NowListeningSection({
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.provider_token) {
           setClientSpotifyToken(session.provider_token);
-          // Set cookie on client if not already present
           if (typeof document !== 'undefined') {
             document.cookie = `spotify_provider_token=${session.provider_token}; path=/; max-age=3600; SameSite=Lax`;
           }
@@ -220,11 +238,27 @@ export default function NowListeningSection({
         console.warn('Session token check error:', e);
       }
     };
+
     checkSession();
+
+    // Subscribe to auth changes to update token dynamically
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.provider_token) {
+        setClientSpotifyToken(session.provider_token);
+        if (typeof document !== 'undefined') {
+          document.cookie = `spotify_provider_token=${session.provider_token}; path=/; max-age=3600; SameSite=Lax`;
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Real-time Spotify API polling
-  const pollServerSpotifyStatus = useCallback(async () => {
+  // Real-time Spotify API polling with high reactivity
+  const pollServerSpotifyStatus = useCallback(async (isManual: boolean = false) => {
+    if (isManual) setIsRefreshing(true);
     try {
       const headers: Record<string, string> = {};
       if (clientSpotifyToken) {
@@ -235,7 +269,11 @@ export default function NowListeningSection({
         headers,
         cache: 'no-store'
       });
-      if (!res.ok) return;
+
+      if (!res.ok) {
+        if (isManual) setIsRefreshing(false);
+        return;
+      }
 
       const data = await res.json();
 
@@ -244,47 +282,110 @@ export default function NowListeningSection({
 
         if (data.is_playing && data.track) {
           // Live Spotify playback detected!
-          setActivities(prev => prev.map(act => {
-            if (act.isSelf) {
-              return {
-                ...act,
-                isPlaying: true,
-                track: data.track,
-                progressSec: data.progressSec || 0,
-                lastPlayedText: 'In ascolto ora (Spotify Live)',
-                device: data.device || 'Spotify Device'
-              };
-            }
-            return act;
-          }));
+          setActivities((prev) =>
+            prev.map((act) => {
+              if (act.isSelf) {
+                return {
+                  ...act,
+                  isPlaying: true,
+                  track: data.track,
+                  progressSec: data.progressSec || 0,
+                  lastPlayedText: 'In ascolto ora',
+                  device: data.device || 'Spotify Device'
+                };
+              }
+              return act;
+            })
+          );
         } else {
-          // Spotify is stopped or paused
-          setActivities(prev => prev.map(act => {
-            if (act.isSelf) {
-              return {
-                ...act,
-                isPlaying: false,
-                lastPlayedText: 'Musica in pausa su Spotify',
-                progressSec: 0
-              };
-            }
-            return act;
-          }));
+          // Spotify is stopped or paused -> STRICTLY SET NO_TRACK
+          setActivities((prev) =>
+            prev.map((act) => {
+              if (act.isSelf) {
+                return {
+                  ...act,
+                  isPlaying: false,
+                  track: NO_TRACK,
+                  lastPlayedText: 'Nessun brano in esecuzione',
+                  progressSec: 0
+                };
+              }
+              return act;
+            })
+          );
         }
       } else {
         setIsLiveSpotifyConnected(false);
       }
     } catch (err) {
       console.warn('Error polling /api/spotify/current:', err);
+    } finally {
+      if (isManual) {
+        setTimeout(() => setIsRefreshing(false), 400);
+      }
     }
   }, [clientSpotifyToken]);
 
-  // Poll Spotify every 3.5s
+  // High-reactivity polling: every 2000ms + on window focus + on tab visibility change
   useEffect(() => {
     pollServerSpotifyStatus();
-    const interval = setInterval(pollServerSpotifyStatus, 3500);
-    return () => clearInterval(interval);
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        pollServerSpotifyStatus();
+      }
+    }, 2000);
+
+    const handleFocus = () => {
+      pollServerSpotifyStatus();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        pollServerSpotifyStatus();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [pollServerSpotifyStatus]);
+
+  // Fetch recent tracks when modal opens or user switches to 'recent' tab
+  const fetchRecentSpotifyTracks = useCallback(async () => {
+    setIsLoadingRecent(true);
+    try {
+      const headers: Record<string, string> = {};
+      if (clientSpotifyToken) {
+        headers['Authorization'] = `Bearer ${clientSpotifyToken}`;
+      }
+      const res = await fetch('/api/spotify/recent', {
+        headers,
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.tracks && Array.isArray(data.tracks) && data.tracks.length > 0) {
+          setRecentTracks(data.tracks);
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching recent tracks:', err);
+    } finally {
+      setIsLoadingRecent(false);
+    }
+  }, [clientSpotifyToken]);
+
+  useEffect(() => {
+    if (showSongPickerModal) {
+      fetchRecentSpotifyTracks();
+    }
+  }, [showSongPickerModal, fetchRecentSpotifyTracks]);
 
   // Connect / Reconnect Spotify OAuth
   const handleConnectSpotifyLive = async () => {
@@ -293,7 +394,7 @@ export default function NowListeningSection({
         provider: 'spotify',
         options: {
           redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
-          scopes: 'user-read-currently-playing user-read-playback-state user-modify-playback-state user-read-recently-played user-read-email'
+          scopes: 'user-read-currently-playing user-read-playback-state user-modify-playback-state user-read-recently-played user-read-email user-top-read'
         }
       });
       if (error) {
@@ -306,83 +407,35 @@ export default function NowListeningSection({
     }
   };
 
-  // Initialize member listening states (strictly NO fake isPlaying by default)
+  // Initialize member listening states: default strictly to NO_TRACK unless confirmed live playing
   useEffect(() => {
     if (!members || members.length === 0) return;
 
-    let savedState: Record<string, any> = {};
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(storageKey);
-        if (raw) savedState = JSON.parse(raw);
-      } catch (e) {
-        console.error('Error loading saved listening state:', e);
-      }
-    }
-
     const newActivities: MemberActivity[] = members.map((member, index) => {
       const isSelf = checkIsSelf(member, index);
-      const cached = savedState[member.id];
 
-      if (
-        cached &&
-        cached.track &&
-        cached.track.coverUrl &&
-        !cached.track.coverUrl.includes('unsplash')
-      ) {
-        return {
-          memberId: member.id,
-          memberName: member.name || (isSelf ? 'Tu' : `Membro #${index + 1}`),
-          memberEmail: member.email || '',
-          isSelf,
-          isPlaying: isSelf ? Boolean(cached.isPlaying) : false,
-          track: cached.track,
-          progressSec: cached.progressSec || 0,
-          lastPlayedText: cached.isPlaying ? 'In ascolto ora' : 'Musica in pausa',
-          device: cached.device || DEVICES[index % DEVICES.length]
-        };
-      }
-
-      // Default for current user ("Tu"): Paused with Sfera Ebbasta catalogue entry
-      if (isSelf) {
-        const defaultUserTrack = DEFAULT_TRACK_CATALOG[0]; // Sfera Ebbasta
-        return {
-          memberId: member.id,
-          memberName: member.name || 'Tu',
-          memberEmail: member.email || '',
-          isSelf: true,
-          isPlaying: false, // Default is STOPPED / IN PAUSA
-          track: defaultUserTrack,
-          progressSec: 0,
-          lastPlayedText: 'Musica in pausa',
-          device: 'Spotify su iPhone'
-        };
-      }
-
-      // Default for group members: Paused / Recent
-      const track = DEFAULT_TRACK_CATALOG[(index + 1) % DEFAULT_TRACK_CATALOG.length];
       return {
         memberId: member.id,
-        memberName: member.name || `Membro #${index + 1}`,
+        memberName: member.name || (isSelf ? 'Tu' : `Membro #${index + 1}`),
         memberEmail: member.email || '',
-        isSelf: false,
+        isSelf,
         isPlaying: false,
-        track,
+        track: NO_TRACK,
         progressSec: 0,
-        lastPlayedText: `${(index + 1) * 8} min fa`,
-        device: DEVICES[index % DEVICES.length]
+        lastPlayedText: 'Nessun brano in esecuzione',
+        device: isSelf ? 'Spotify su iPhone' : DEVICES[index % DEVICES.length]
       };
     });
 
     setActivities(newActivities);
-  }, [members, currentUser, planId, storageKey, checkIsSelf]);
+  }, [members, currentUser, planId, checkIsSelf]);
 
-  // Smooth progress advance only for playing tracks
+  // Smooth progress advance only when actively playing
   useEffect(() => {
     const interval = setInterval(() => {
       setActivities((prev) =>
         prev.map((act) => {
-          if (!act.isPlaying) return act;
+          if (!act.isPlaying || act.track.id === 'none') return act;
           const nextSec = act.progressSec + 1;
           if (nextSec >= act.track.durationSec) {
             return { ...act, progressSec: 0 };
@@ -396,36 +449,39 @@ export default function NowListeningSection({
   }, []);
 
   const formatTime = (seconds: number) => {
+    if (!seconds || seconds <= 0) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  const persistActivities = (updatedList: MemberActivity[]) => {
-    if (typeof window === 'undefined') return;
-    const mapToSave: Record<string, any> = {};
-    updatedList.forEach((a) => {
-      mapToSave[a.memberId] = {
-        isPlaying: a.isPlaying,
-        track: a.track,
-        progressSec: a.progressSec,
-        lastPlayedText: a.lastPlayedText,
-        device: a.device
-      };
-    });
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(mapToSave));
-    } catch (e) {
-      console.error('Failed to save to localStorage:', e);
-    }
   };
 
   const myActivity = activities.find((a) => a.isSelf) || activities[0];
 
   // REAL SPOTIFY SYNC: Commands real Spotify player & opens song on device
   const handleSyncWithMember = async (targetMember: MemberActivity) => {
+    if (targetMember.track.id === 'none') {
+      showToast('Questo membro non ha nessun brano in esecuzione al momento.', 'info');
+      return;
+    }
+
     if (onTriggerConfetti) onTriggerConfetti();
     setIsSyncingPlayer(true);
+
+    // Optimistic UI Update for zero perceived latency
+    setActivities((prev) =>
+      prev.map((act) =>
+        act.isSelf
+          ? {
+              ...act,
+              isPlaying: true,
+              track: targetMember.track,
+              progressSec: targetMember.progressSec,
+              lastPlayedText: 'In ascolto ora (Sincronizzato)',
+              device: 'Spotify Group Session'
+            }
+          : act
+      )
+    );
 
     const trackId = targetMember.track.spotifyUrl.includes('/track/')
       ? targetMember.track.spotifyUrl.split('/track/')[1].split('?')[0]
@@ -453,144 +509,137 @@ export default function NowListeningSection({
         if (data.success) {
           playedViaApi = true;
           showToast(`🎵 Brano avviato sul tuo Spotify: "${targetMember.track.title}"!`, 'success');
+          setTimeout(() => pollServerSpotifyStatus(), 300);
+          setTimeout(() => pollServerSpotifyStatus(), 1200);
         }
       }
     } catch (e) {
       console.warn('API Play error:', e);
     }
 
-    // 2. Open Spotify directly if not played via API
+    // 2. Open Spotify directly if API play was not possible
     if (!playedViaApi) {
       window.open(targetMember.track.spotifyUrl, '_blank');
       showToast(`🎵 Sincronizzazione: apertura "${targetMember.track.title}" su Spotify...`, 'success');
     }
 
-    // 3. Update dashboard state
-    setActivities((prev) => {
-      const updated = prev.map((act) => {
-        if (act.isSelf) {
-          return {
-            ...act,
-            isPlaying: true,
-            track: targetMember.track,
-            progressSec: targetMember.progressSec,
-            lastPlayedText: 'In ascolto ora (Sincronizzato)',
-            device: 'Spotify Group Session'
-          };
-        }
-        return act;
-      });
-      persistActivities(updated);
-      return updated;
-    });
-
     setIsSyncingPlayer(false);
   };
 
-  // Pause playback
+  // Pause playback: immediate optimistic update + API command + quick re-poll
   const handlePauseMyPlayback = async () => {
+    // Immediate UI feedback
+    setActivities((prev) =>
+      prev.map((act) => {
+        if (act.isSelf) {
+          return {
+            ...act,
+            isPlaying: false,
+            track: NO_TRACK,
+            progressSec: 0,
+            lastPlayedText: 'Nessun brano in esecuzione'
+          };
+        }
+        return act;
+      })
+    );
+    showToast('Nessun brano in riproduzione ⏸️', 'info');
+
     try {
       const headers: Record<string, string> = {};
       if (clientSpotifyToken) headers['Authorization'] = `Bearer ${clientSpotifyToken}`;
       await fetch('/api/spotify/pause', { method: 'POST', headers });
+      setTimeout(() => pollServerSpotifyStatus(), 200);
+      setTimeout(() => pollServerSpotifyStatus(), 800);
     } catch (e) {
       console.warn(e);
     }
+  };
 
-    setActivities((prev) => {
-      const updated = prev.map((act) => {
+  // Stop playback / Clear track to NO_TRACK
+  const handleStopMyPlayback = () => {
+    setActivities((prev) =>
+      prev.map((act) => {
         if (act.isSelf) {
           return {
             ...act,
             isPlaying: false,
-            lastPlayedText: 'Musica in pausa'
+            track: NO_TRACK,
+            progressSec: 0,
+            lastPlayedText: 'Nessun brano in esecuzione'
           };
         }
         return act;
-      });
-      persistActivities(updated);
-      return updated;
-    });
-    showToast('Hai messo in pausa la musica ⏸️', 'info');
+      })
+    );
+    showToast('Stato azzerato: Nessun brano in esecuzione ⏹️', 'info');
+    handlePauseMyPlayback();
   };
 
-  // Resume playback
+  // Resume playback or start a selected track
   const handlePlayMyPlayback = async () => {
-    if (myActivity?.track) {
-      const trackId = myActivity.track.spotifyUrl.includes('/track/')
-        ? myActivity.track.spotifyUrl.split('/track/')[1].split('?')[0]
-        : myActivity.track.id;
-      try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (clientSpotifyToken) headers['Authorization'] = `Bearer ${clientSpotifyToken}`;
-        await fetch('/api/spotify/play', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ uri: `spotify:track:${trackId}` })
-        });
-      } catch (e) {
-        console.warn(e);
-      }
-    }
+    const trackToPlay = myActivity?.track?.id !== 'none' ? myActivity.track : DEFAULT_TRACK_CATALOG[0];
 
-    setActivities((prev) => {
-      const updated = prev.map((act) => {
+    // Optimistic UI update
+    setActivities((prev) =>
+      prev.map((act) => {
         if (act.isSelf) {
           return {
             ...act,
             isPlaying: true,
+            track: trackToPlay,
             lastPlayedText: 'In ascolto ora'
           };
         }
         return act;
-      });
-      persistActivities(updated);
-      return updated;
-    });
-    showToast('Riproduzione avviata per il tuo profilo SpotiShare ▶️', 'success');
-  };
+      })
+    );
+    showToast(`Riproduzione avviata: "${trackToPlay.title}" ▶️`, 'success');
 
-  // Reset playback
-  const handleStopMyPlayback = () => {
-    setActivities((prev) => {
-      const updated = prev.map((act) => {
-        if (act.isSelf) {
-          return {
-            ...act,
-            isPlaying: false,
-            progressSec: 0,
-            lastPlayedText: 'Musica fermata'
-          };
-        }
-        return act;
+    const trackId = trackToPlay.spotifyUrl.includes('/track/')
+      ? trackToPlay.spotifyUrl.split('/track/')[1].split('?')[0]
+      : trackToPlay.id;
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (clientSpotifyToken) headers['Authorization'] = `Bearer ${clientSpotifyToken}`;
+      await fetch('/api/spotify/play', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ uri: `spotify:track:${trackId}` })
       });
-      persistActivities(updated);
-      return updated;
-    });
-    showToast('Musica fermata e avanzamento azzerato ⏹️', 'info');
+      setTimeout(() => pollServerSpotifyStatus(), 300);
+      setTimeout(() => pollServerSpotifyStatus(), 1200);
+    } catch (e) {
+      console.warn(e);
+    }
   };
 
   // Toggle play/pause for a member row
   const handleTogglePlay = (memberId: string) => {
-    setActivities((prev) => {
-      const updated = prev.map((act) => {
+    setActivities((prev) =>
+      prev.map((act) => {
         if (act.memberId === memberId) {
           const nextPlaying = !act.isPlaying;
           return {
             ...act,
             isPlaying: nextPlaying,
-            lastPlayedText: nextPlaying ? 'In ascolto ora' : 'Musica in pausa'
+            track: nextPlaying ? (act.track.id === 'none' ? DEFAULT_TRACK_CATALOG[0] : act.track) : NO_TRACK,
+            lastPlayedText: nextPlaying ? 'In ascolto ora' : 'Nessun brano in esecuzione'
           };
         }
         return act;
-      });
-      persistActivities(updated);
-      return updated;
-    });
+      })
+    );
   };
 
   // Synthesizer preview
   const handlePlaySoundPreview = (member: MemberActivity) => {
+    if (member.track.id === 'none') {
+      showToast('Nessun brano da riprodurre per questa anteprima.', 'info');
+      return;
+    }
+
     if (previewingMemberId === member.memberId) {
       if (audioContextRef.current) {
         audioContextRef.current.close();
@@ -656,51 +705,70 @@ export default function NowListeningSection({
     }
   };
 
-  // Change current user track
-  const handleSelectTrackForSelf = (track: TrackData, makeActive: boolean = false) => {
-    setActivities((prev) => {
-      const updated = prev.map((act) => {
+  // Change current user track from catalogue or recent tracks
+  const handleSelectTrackForSelf = async (track: TrackData, makeActive: boolean = true) => {
+    // 1. Optimistic UI update
+    setActivities((prev) =>
+      prev.map((act) => {
         if (act.isSelf) {
           return {
             ...act,
             isPlaying: makeActive,
             track,
             progressSec: 0,
-            lastPlayedText: makeActive ? 'In ascolto ora' : 'Musica in pausa'
+            lastPlayedText: makeActive ? 'In ascolto ora' : 'Nessun brano in esecuzione'
           };
         }
         return act;
-      });
-      persistActivities(updated);
-      return updated;
-    });
+      })
+    );
 
     setShowSongPickerModal(false);
     showToast(
       makeActive
-        ? `Brano impostato: "${track.title}" di ${track.artist}`
-        : `Brano impostato (in pausa): "${track.title}"`,
+        ? `🎵 In ascolto: "${track.title}" di ${track.artist}`
+        : `Brano impostato: "${track.title}"`,
       'success'
     );
     if (onTriggerConfetti) onTriggerConfetti();
+
+    // 2. If makeActive, send Spotify play command
+    if (makeActive) {
+      const trackId = track.spotifyUrl.includes('/track/')
+        ? track.spotifyUrl.split('/track/')[1].split('?')[0]
+        : track.id;
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (clientSpotifyToken) headers['Authorization'] = `Bearer ${clientSpotifyToken}`;
+        await fetch('/api/spotify/play', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ uri: `spotify:track:${trackId}` })
+        });
+        setTimeout(() => pollServerSpotifyStatus(), 300);
+        setTimeout(() => pollServerSpotifyStatus(), 1200);
+      } catch (e) {
+        console.warn(e);
+      }
+    }
   };
 
   const handleSetCustomSong = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customSongTitle.trim()) return;
 
-    const artistName = customSongArtist.trim() || 'Sfera Ebbasta';
+    const artistName = customSongArtist.trim() || 'Artista';
     const songTitle = customSongTitle.trim();
 
     const newTrack: TrackData = {
       id: `custom-${Date.now()}`,
       title: songTitle,
       artist: artistName,
-      album: 'Brano Personale',
+      album: 'Brano Personalizzato',
       durationSec: 210,
       coverUrl: DEFAULT_FALLBACK_COVER,
       spotifyUrl: `https://open.spotify.com/search/${encodeURIComponent(songTitle + ' ' + artistName)}`,
-      genre: 'Personal Track',
+      genre: 'Personalizzato',
       audioTheme: 'energetic'
     };
 
@@ -711,13 +779,13 @@ export default function NowListeningSection({
 
   const filteredActivities = useMemo(() => {
     return activities.filter((act) => {
-      if (filterMode === 'playing') return act.isPlaying;
-      if (filterMode === 'paused') return !act.isPlaying;
+      if (filterMode === 'playing') return act.isPlaying && act.track.id !== 'none';
+      if (filterMode === 'paused') return !act.isPlaying || act.track.id === 'none';
       return true;
     });
   }, [activities, filterMode]);
 
-  const currentlyPlayingCount = activities.filter((a) => a.isPlaying).length;
+  const currentlyPlayingCount = activities.filter((a) => a.isPlaying && a.track.id !== 'none').length;
 
   return (
     <div className="w-full bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 sm:p-7 shadow-2xl ring-1 ring-white/5 relative overflow-hidden transition-all">
@@ -753,8 +821,8 @@ export default function NowListeningSection({
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <span className="relative flex h-3.5 w-3.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#1DB954]" />
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${currentlyPlayingCount > 0 ? 'bg-green-400' : 'bg-zinc-600'}`} />
+              <span className={`relative inline-flex rounded-full h-3.5 w-3.5 ${currentlyPlayingCount > 0 ? 'bg-[#1DB954]' : 'bg-zinc-500'}`} />
             </span>
             <h3 className="text-xl sm:text-2xl font-black text-zinc-100 flex items-center gap-2.5 tracking-tight">
               <span>🎧</span> In Ascolto Ora su Spotify
@@ -762,11 +830,11 @@ export default function NowListeningSection({
             {isLiveSpotifyConnected ? (
               <span className="text-[10px] uppercase font-black tracking-wider bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/40 px-3 py-1 rounded-full shadow-[0_0_10px_rgba(29,185,84,0.3)] flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#1DB954] animate-pulse" />
-                Spotify Live Connesso
+                Live Connesso
               </span>
             ) : (
               <span className="text-[10px] uppercase font-black tracking-wider bg-zinc-800 text-zinc-400 border border-white/10 px-3 py-1 rounded-full">
-                Pronto per il Sync
+                Sync Disponibile
               </span>
             )}
           </div>
@@ -776,7 +844,17 @@ export default function NowListeningSection({
         </div>
 
         {/* CONTROLS */}
-        <div className="flex items-center gap-3 flex-wrap shrink-0">
+        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+          {/* Refresh Button */}
+          <button
+            onClick={() => pollServerSpotifyStatus(true)}
+            disabled={isRefreshing}
+            className="p-2 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 rounded-2xl transition-all active:scale-95 disabled:opacity-50"
+            title="Aggiorna stato Spotify in tempo reale"
+          >
+            <span className={`inline-block text-sm ${isRefreshing ? 'animate-spin' : ''}`}>🔄</span>
+          </button>
+
           {/* Filter Tabs */}
           <div className="flex items-center bg-black/50 p-1 rounded-2xl border border-white/10 text-xs">
             <button
@@ -812,69 +890,99 @@ export default function NowListeningSection({
             </button>
           </div>
 
-          {/* Button: Change your song */}
+          {/* Button: Choose your song / Catalog */}
           <button
             onClick={() => setShowSongPickerModal(true)}
             className="inline-flex items-center gap-2 bg-gradient-to-r from-[#1DB954] to-[#1ed760] hover:scale-105 text-black font-extrabold text-xs px-4 py-2 rounded-2xl transition-all active:scale-95 shadow-lg shadow-[#1DB954]/25"
           >
             <span>🎵</span>
-            <span>Il tuo brano</span>
+            <span>I tuoi brani</span>
           </button>
         </div>
       </div>
 
       {/* USER DEDICATED CONTROL BAR */}
       {myActivity && (
-        <div className="mt-5 p-4 bg-gradient-to-r from-[#1DB954]/10 via-black/40 to-black/40 border border-[#1DB954]/30 rounded-2xl sm:rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="relative w-12 h-12 shrink-0 rounded-2xl overflow-hidden border border-[#1DB954]/40 shadow-md bg-zinc-900">
-              <img
-                src={myActivity.track.coverUrl || DEFAULT_FALLBACK_COVER}
-                alt="Your current track cover"
-                referrerPolicy="no-referrer"
-                className={`w-full h-full object-cover ${myActivity.isPlaying ? 'opacity-100' : 'opacity-60 grayscale-[30%]'}`}
-                onError={(e) => {
-                  e.currentTarget.src = DEFAULT_FALLBACK_COVER;
-                }}
-              />
-              {myActivity.isPlaying && (
-                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                  <div className="flex items-end gap-[2px] h-3 w-3">
-                    <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-1" />
-                    <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-2" />
-                    <span className="w-[2px] bg-[#1DB954] rounded-full equalizer-bar-3" />
+        <div className={`mt-5 p-4 sm:p-5 border rounded-2xl sm:rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all ${
+          myActivity.isPlaying && myActivity.track.id !== 'none'
+            ? 'bg-gradient-to-r from-[#1DB954]/15 via-black/50 to-black/40 border-[#1DB954]/40 shadow-[0_4px_30px_rgba(29,185,84,0.15)]'
+            : 'bg-black/40 border-white/10'
+        }`}>
+          <div className="flex items-center gap-4 min-w-0">
+            {/* Cover image or vinyl placeholder */}
+            <div className="relative w-14 h-14 shrink-0 rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 flex items-center justify-center">
+              {myActivity.track.id !== 'none' && myActivity.track.coverUrl ? (
+                <img
+                  src={myActivity.track.coverUrl}
+                  alt="Copertina brano"
+                  referrerPolicy="no-referrer"
+                  className={`w-full h-full object-cover ${myActivity.isPlaying ? 'opacity-100' : 'opacity-60 grayscale-[30%]'}`}
+                  onError={(e) => {
+                    e.currentTarget.src = DEFAULT_FALLBACK_COVER;
+                  }}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-zinc-600">
+                  <span className="text-xl">💿</span>
+                </div>
+              )}
+
+              {myActivity.isPlaying && myActivity.track.id !== 'none' && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <div className="flex items-end gap-[2px] h-3.5 w-3.5">
+                    <span className="w-[2.5px] bg-[#1DB954] rounded-full equalizer-bar-1" />
+                    <span className="w-[2.5px] bg-[#1DB954] rounded-full equalizer-bar-2" />
+                    <span className="w-[2.5px] bg-[#1DB954] rounded-full equalizer-bar-3" />
                   </div>
                 </div>
               )}
             </div>
 
+            {/* Track Info */}
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-black text-white">Il tuo stato:</span>
-                {myActivity.isPlaying ? (
-                  <span className="inline-flex items-center gap-1.5 bg-[#1DB954]/20 border border-[#1DB954]/40 text-[#1DB954] text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="text-xs font-black text-zinc-400">Il tuo stato:</span>
+                {myActivity.isPlaying && myActivity.track.id !== 'none' ? (
+                  <span className="inline-flex items-center gap-1.5 bg-[#1DB954]/20 border border-[#1DB954]/40 text-[#1DB954] text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full shadow-sm">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#1DB954] animate-pulse" />
                     In Riproduzione
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1.5 bg-zinc-800/80 border border-white/10 text-zinc-400 text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full">
                     <span>⏸️</span>
-                    {myActivity.lastPlayedText}
+                    Non in riproduzione
                   </span>
                 )}
               </div>
-              <p className="text-xs text-zinc-300 font-bold truncate mt-1">
-                {myActivity.track.title} <span className="text-zinc-500 font-normal">di</span> {myActivity.track.artist}
-              </p>
+
+              {myActivity.track.id !== 'none' ? (
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-100 font-extrabold truncate">
+                    {myActivity.track.title}
+                  </p>
+                  <p className="text-xs text-zinc-400 truncate mt-0.5">
+                    di <span className="text-zinc-200 font-semibold">{myActivity.track.artist}</span>
+                  </p>
+                </div>
+              ) : (
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-400 font-bold truncate">
+                    Nessun brano in esecuzione
+                  </p>
+                  <p className="text-[11px] text-zinc-500 truncate mt-0.5">
+                    Avvia la musica su Spotify o seleziona un brano dal catalogo.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Quick Buttons */}
+          {/* Quick Controls */}
           <div className="flex items-center gap-2 flex-wrap shrink-0">
-            {myActivity.isPlaying ? (
+            {myActivity.isPlaying && myActivity.track.id !== 'none' ? (
               <button
                 onClick={handlePauseMyPlayback}
-                className="inline-flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm"
+                className="inline-flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
                 title="Metti in pausa la musica"
               >
                 <span>⏸️</span>
@@ -883,7 +991,7 @@ export default function NowListeningSection({
             ) : (
               <button
                 onClick={handlePlayMyPlayback}
-                className="inline-flex items-center gap-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 text-[#1DB954] border border-[#1DB954]/40 text-xs font-black px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm"
+                className="inline-flex items-center gap-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 text-[#1DB954] border border-[#1DB954]/40 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
                 title="Avvia la riproduzione del brano"
               >
                 <span>▶️</span>
@@ -891,21 +999,23 @@ export default function NowListeningSection({
               </button>
             )}
 
-            <button
-              onClick={handleStopMyPlayback}
-              className="inline-flex items-center gap-1 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-xs font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95"
-              title="Ferma musica e azzera avanzamento"
-            >
-              <span>⏹️</span>
-              <span>Ferma</span>
-            </button>
+            {myActivity.isPlaying && (
+              <button
+                onClick={handleStopMyPlayback}
+                className="inline-flex items-center gap-1 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95"
+                title="Azzera e imposta nessun brano"
+              >
+                <span>⏹️</span>
+                <span>Azzera</span>
+              </button>
+            )}
 
             <button
               onClick={() => setShowSongPickerModal(true)}
-              className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white border border-white/15 text-xs font-extrabold px-3 py-1.5 rounded-xl transition-all active:scale-95"
+              className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white border border-white/15 text-xs font-extrabold px-3.5 py-2 rounded-xl transition-all active:scale-95"
             >
-              <span>✏️</span>
-              <span>Cambia Brano</span>
+              <span>🎵</span>
+              <span>Scegli Brano</span>
             </button>
           </div>
         </div>
@@ -936,10 +1046,10 @@ export default function NowListeningSection({
 
             {/* ROWS */}
             {filteredActivities.map((act) => {
-              const progressPercent = Math.min(
-                100,
-                Math.max(0, (act.progressSec / act.track.durationSec) * 100)
-              );
+              const hasActiveSong = act.isPlaying && act.track.id !== 'none';
+              const progressPercent = hasActiveSong && act.track.durationSec > 0
+                ? Math.min(100, Math.max(0, (act.progressSec / act.track.durationSec) * 100))
+                : 0;
               const isPreviewing = previewingMemberId === act.memberId;
 
               return (
@@ -947,15 +1057,17 @@ export default function NowListeningSection({
                   key={act.memberId}
                   className={`p-4 bg-black/40 hover:bg-black/60 border ${
                     act.isSelf
-                      ? 'border-[#1DB954]/40 bg-gradient-to-r from-[#1DB954]/5 to-black/50 shadow-[0_4px_25px_rgba(29,185,84,0.15)]'
-                      : act.isPlaying
+                      ? hasActiveSong
+                        ? 'border-[#1DB954]/40 bg-gradient-to-r from-[#1DB954]/5 to-black/50 shadow-[0_4px_25px_rgba(29,185,84,0.15)]'
+                        : 'border-white/10'
+                      : hasActiveSong
                       ? 'border-[#1DB954]/20 hover:border-[#1DB954]/40 shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
                       : 'border-white/5 hover:border-white/15'
                   } rounded-2xl sm:rounded-3xl transition-all duration-200 flex flex-col lg:grid lg:grid-cols-12 gap-4 lg:items-center`}
                 >
                   {/* COL 1: EQUALIZER */}
                   <div className="hidden lg:flex lg:col-span-1 items-center justify-center text-zinc-400 text-xs font-mono font-bold">
-                    {act.isPlaying ? (
+                    {hasActiveSong ? (
                       <div className="flex items-end gap-[2px] h-4 w-4" title="In riproduzione">
                         <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-1" />
                         <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-2" />
@@ -963,46 +1075,61 @@ export default function NowListeningSection({
                         <span className="w-[3px] bg-[#1DB954] rounded-full equalizer-bar-4" />
                       </div>
                     ) : (
-                      <span className="text-zinc-600">⏸️</span>
+                      <span className="text-zinc-600 text-xs">⏸️</span>
                     )}
                   </div>
 
                   {/* COL 2: ALBUM COVER & TRACK INFO */}
                   <div className="lg:col-span-4 flex items-center gap-3.5 min-w-0">
-                    <div className="relative w-14 h-14 shrink-0 rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 group-hover:scale-105 transition-transform">
-                      <img
-                        src={act.track.coverUrl || DEFAULT_FALLBACK_COVER}
-                        alt={`${act.track.title} album cover`}
-                        referrerPolicy="no-referrer"
-                        className={`w-full h-full object-cover ${
-                          act.isPlaying ? 'opacity-100' : 'opacity-60 grayscale-[25%]'
-                        }`}
-                        onError={(e) => {
-                          e.currentTarget.src = DEFAULT_FALLBACK_COVER;
-                        }}
-                      />
+                    <div className="relative w-13 h-13 shrink-0 rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 flex items-center justify-center">
+                      {hasActiveSong && act.track.coverUrl ? (
+                        <img
+                          src={act.track.coverUrl}
+                          alt={`${act.track.title} cover`}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.src = DEFAULT_FALLBACK_COVER;
+                          }}
+                        />
+                      ) : (
+                        <span className="text-zinc-600 text-base">💿</span>
+                      )}
                     </div>
 
                     <div className="min-w-0 flex-grow">
-                      <div className="flex items-center gap-2">
-                        <a
-                          href={act.track.spotifyUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-black text-sm text-zinc-100 hover:text-[#1DB954] truncate transition-colors"
-                          title={`Apri "${act.track.title}" su Spotify`}
-                        >
-                          {act.track.title}
-                        </a>
-                      </div>
-                      <p className="text-xs text-zinc-300 font-bold truncate mt-0.5">
-                        {act.track.artist}
-                      </p>
-                      <p className="text-[10px] text-zinc-500 truncate mt-0.5 flex items-center gap-1.5">
-                        <span>{act.track.album}</span>
-                        <span>•</span>
-                        <span className="text-[#1DB954] font-medium">{act.track.genre}</span>
-                      </p>
+                      {hasActiveSong ? (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={act.track.spotifyUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-black text-sm text-zinc-100 hover:text-[#1DB954] truncate transition-colors"
+                              title={`Apri "${act.track.title}" su Spotify`}
+                            >
+                              {act.track.title}
+                            </a>
+                          </div>
+                          <p className="text-xs text-zinc-300 font-bold truncate mt-0.5">
+                            {act.track.artist}
+                          </p>
+                          <p className="text-[10px] text-zinc-500 truncate mt-0.5 flex items-center gap-1.5">
+                            <span>{act.track.album}</span>
+                            <span>•</span>
+                            <span className="text-[#1DB954] font-medium">{act.track.genre}</span>
+                          </p>
+                        </>
+                      ) : (
+                        <div>
+                          <p className="font-bold text-sm text-zinc-400 truncate">
+                            Nessun brano in esecuzione
+                          </p>
+                          <p className="text-[11px] text-zinc-500 truncate mt-0.5">
+                            Nessuna riproduzione attiva
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1028,7 +1155,7 @@ export default function NowListeningSection({
 
                   {/* COL 4: PROGRESS BAR */}
                   <div className="lg:col-span-2 min-w-0">
-                    {act.isPlaying ? (
+                    {hasActiveSong ? (
                       <div className="space-y-1.5">
                         <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
                           <div
@@ -1043,17 +1170,17 @@ export default function NowListeningSection({
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 bg-white/5 px-2.5 py-1 rounded-xl w-fit">
+                      <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500 bg-white/5 px-2.5 py-1 rounded-xl w-fit">
                         <span>⏸️</span>
-                        <span>{act.lastPlayedText}</span>
+                        <span>Nessun brano in esecuzione</span>
                       </div>
                     )}
                   </div>
 
                   {/* COL 5: ACTIONS */}
                   <div className="lg:col-span-2 flex items-center justify-end gap-2 flex-wrap">
-                    {/* Sync / Ascolta Insieme */}
-                    {!act.isSelf && (
+                    {/* Sync / Listen Together */}
+                    {!act.isSelf && hasActiveSong && (
                       <button
                         onClick={() => handleSyncWithMember(act)}
                         disabled={isSyncingPlayer}
@@ -1066,44 +1193,57 @@ export default function NowListeningSection({
                     )}
 
                     {/* Synth Preview */}
-                    <button
-                      onClick={() => handlePlaySoundPreview(act)}
-                      className={`p-1.5 sm:px-2.5 sm:py-1.5 border text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center gap-1 ${
-                        isPreviewing
-                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse'
-                          : 'bg-white/5 border-white/10 text-zinc-300 hover:text-white hover:bg-white/10'
-                      }`}
-                      title="Anteprima accordi musicali"
-                    >
-                      <span>{isPreviewing ? '🔊' : '🎵'}</span>
-                    </button>
+                    {hasActiveSong && (
+                      <button
+                        onClick={() => handlePlaySoundPreview(act)}
+                        className={`p-1.5 sm:px-2.5 sm:py-1.5 border text-xs font-bold rounded-xl transition-all active:scale-95 flex items-center gap-1 ${
+                          isPreviewing
+                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse'
+                            : 'bg-white/5 border-white/10 text-zinc-300 hover:text-white hover:bg-white/10'
+                        }`}
+                        title="Anteprima accordi musicali"
+                      >
+                        <span>{isPreviewing ? '🔊' : '🎵'}</span>
+                      </button>
+                    )}
 
                     {/* Play/Pause Toggle */}
                     <button
                       onClick={() => handleTogglePlay(act.memberId)}
                       className={`p-1.5 border rounded-xl transition-all text-xs ${
-                        act.isPlaying
+                        hasActiveSong
                           ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
                           : 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
                       }`}
-                      title={act.isPlaying ? 'Metti in pausa' : 'Avvia riproduzione'}
+                      title={hasActiveSong ? 'Metti in pausa' : 'Avvia riproduzione'}
                     >
-                      {act.isPlaying ? '⏸' : '▶️'}
+                      {hasActiveSong ? '⏸' : '▶️'}
                     </button>
 
                     {/* Official Spotify button */}
-                    <a
-                      href={act.track.spotifyUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm shadow-[#1DB954]/25 shrink-0"
-                      title="Apri traccia su Spotify"
-                    >
-                      <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.516 17.305c-.216.355-.678.47-1.033.254-2.827-1.727-6.386-2.118-10.578-1.16-.407.094-.813-.162-.907-.568-.094-.407.162-.813.568-.907 4.588-1.049 8.528-.607 11.696 1.348.355.216.47.678.254 1.033zm1.472-3.275c-.272.443-.853.585-1.296.313-3.237-1.99-8.172-2.565-12.001-1.402-.497.151-1.026-.134-1.177-.631-.151-.497.134-1.026.631-1.177 4.382-1.33 9.824-.693 13.53 1.587.443.272.585.853.313 1.296zm.127-3.41c-3.882-2.305-10.288-2.518-13.998-1.391-.597.181-1.233-.16-1.414-.757-.181-.597.16-1.233.757-1.414 4.268-1.296 11.341-1.047 15.807 1.604.538.319.715 1.018.396 1.556-.319.538-1.018.715-1.556.396z" />
-                      </svg>
-                      <span>Spotify</span>
-                    </a>
+                    {hasActiveSong ? (
+                      <a
+                        href={act.track.spotifyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-3 py-1.5 rounded-xl transition-all active:scale-95 shadow-sm shadow-[#1DB954]/25 shrink-0"
+                        title="Apri traccia su Spotify"
+                      >
+                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.516 17.305c-.216.355-.678.47-1.033.254-2.827-1.727-6.386-2.118-10.578-1.16-.407.094-.813-.162-.907-.568-.094-.407.162-.813.568-.907 4.588-1.049 8.528-.607 11.696 1.348.355.216.47.678.254 1.033zm1.472-3.275c-.272.443-.853.585-1.296.313-3.237-1.99-8.172-2.565-12.001-1.402-.497.151-1.026-.134-1.177-.631-.151-.497.134-1.026.631-1.177 4.382-1.33 9.824-.693 13.53 1.587.443.272.585.853.313 1.296zm.127-3.41c-3.882-2.305-10.288-2.518-13.998-1.391-.597.181-1.233-.16-1.414-.757-.181-.597.16-1.233.757-1.414 4.268-1.296 11.341-1.047 15.807 1.604.538.319.715 1.018.396 1.556-.319.538-1.018.715-1.556.396z" />
+                        </svg>
+                        <span>Spotify</span>
+                      </a>
+                    ) : (
+                      act.isSelf && (
+                        <button
+                          onClick={() => setShowSongPickerModal(true)}
+                          className="text-xs text-zinc-400 hover:text-zinc-200 bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/10 transition-all font-bold"
+                        >
+                          Scegli
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
               );
@@ -1112,20 +1252,27 @@ export default function NowListeningSection({
         )}
       </div>
 
-      {/* SONG PICKER MODAL */}
+      {/* SONG PICKER & RECENT TRACKS MODAL */}
       {showSongPickerModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl max-w-lg w-full relative overflow-hidden ring-1 ring-white/10 max-h-[90vh] flex flex-col justify-between">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-150"
+          onClick={() => setShowSongPickerModal(false)}
+        >
+          <div
+            className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-7 shadow-2xl max-w-xl w-full relative overflow-hidden ring-1 ring-white/10 max-h-[90vh] flex flex-col justify-between"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-emerald-400" />
 
             <div>
+              {/* Modal Header */}
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-xl font-extrabold text-zinc-100 flex items-center gap-2">
-                    <span>🎧</span> Imposta il tuo brano Spotify
+                    <span>🎧</span> I tuoi brani e catalogo Spotify
                   </h3>
                   <p className="text-xs text-zinc-400 mt-1">
-                    Scegli quale canzone mostrare al gruppo o imposta il tuo stato in pausa.
+                    Scegli un brano da ascoltare o imposta il tuo stato SpotiShare.
                   </p>
                 </div>
                 <button
@@ -1136,123 +1283,273 @@ export default function NowListeningSection({
                 </button>
               </div>
 
-              {/* Quick Pause Action */}
-              <div className="flex items-center gap-2 mb-4 p-2.5 bg-white/5 border border-white/10 rounded-2xl">
-                <span className="text-[11px] text-zinc-300 flex-grow font-medium">
-                  Musica fermata su Spotify?
-                </span>
+              {/* Quick Action: Reset to "Nessun brano in esecuzione" */}
+              <div className="flex items-center justify-between gap-3 mb-4 p-3 bg-white/5 border border-white/10 rounded-2xl">
+                <div>
+                  <p className="text-xs font-bold text-zinc-200">Non stai ascoltando musica?</p>
+                  <p className="text-[11px] text-zinc-400">Imposta lo stato su &quot;Nessun brano in esecuzione&quot;.</p>
+                </div>
                 <button
                   onClick={() => {
                     handlePauseMyPlayback();
                     setShowSongPickerModal(false);
                   }}
-                  className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-xl text-xs transition-all"
+                  className="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-xl text-xs transition-all whitespace-nowrap active:scale-95"
                 >
-                  ⏸️ Imposta In Pausa
+                  ⏸️ Imposta Inattivo
                 </button>
               </div>
 
-              {/* Quick Search */}
-              <div className="mb-3">
-                <input
-                  type="text"
-                  placeholder="Cerca per titolo o artista (es. Sfera Ebbasta, Lazza, Geolier)..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 rounded-2xl p-3 text-xs text-zinc-100 outline-none focus:ring-2 focus:ring-[#1DB954]/50"
-                />
+              {/* Navigation Tabs */}
+              <div className="flex items-center gap-2 p-1 bg-black/60 rounded-2xl border border-white/10 mb-4">
+                <button
+                  onClick={() => setModalTab('recent')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    modalTab === 'recent'
+                      ? 'bg-white/15 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <span>🎧</span>
+                  <span>I tuoi brani Spotify</span>
+                </button>
+                <button
+                  onClick={() => setModalTab('catalog')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    modalTab === 'catalog'
+                      ? 'bg-white/15 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <span>🔥</span>
+                  <span>Hit & Consigliati</span>
+                </button>
+                <button
+                  onClick={() => setModalTab('custom')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    modalTab === 'custom'
+                      ? 'bg-white/15 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <span>✨</span>
+                  <span>Cerca / Altro</span>
+                </button>
               </div>
 
-              {/* Verified Catalogue */}
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar mb-4">
-                {DEFAULT_TRACK_CATALOG.filter(
-                  (t) =>
-                    t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    t.artist.toLowerCase().includes(searchQuery.toLowerCase())
-                ).map((track) => (
-                  <div
-                    key={track.id}
-                    onClick={() => handleSelectTrackForSelf(track, true)}
-                    className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-[#1DB954]/10 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group"
+              {/* TAB 1: RECENT SPOTIFY TRACKS */}
+              {modalTab === 'recent' && (
+                <div>
+                  {isLiveSpotifyConnected ? (
+                    <div>
+                      <div className="flex justify-between items-center mb-2 px-1">
+                        <span className="text-xs font-bold text-zinc-300">Ascoltati di recente sul tuo account</span>
+                        <button
+                          onClick={fetchRecentSpotifyTracks}
+                          disabled={isLoadingRecent}
+                          className="text-[11px] text-[#1DB954] hover:underline font-semibold"
+                        >
+                          {isLoadingRecent ? 'Caricamento...' : 'Aggiorna'}
+                        </button>
+                      </div>
+
+                      {isLoadingRecent ? (
+                        <div className="py-10 text-center">
+                          <div className="w-8 h-8 border-2 border-[#1DB954] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                          <p className="text-xs text-zinc-400">Caricamento dei tuoi brani da Spotify...</p>
+                        </div>
+                      ) : recentTracks.length > 0 ? (
+                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                          {recentTracks.map((track) => (
+                            <div
+                              key={track.id}
+                              onClick={() => handleSelectTrackForSelf(track, true)}
+                              className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-[#1DB954]/10 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <img
+                                  src={track.coverUrl || DEFAULT_FALLBACK_COVER}
+                                  alt={track.title}
+                                  referrerPolicy="no-referrer"
+                                  className="w-11 h-11 rounded-xl object-cover shrink-0 border border-white/10 shadow-md"
+                                  onError={(e) => {
+                                    e.currentTarget.src = DEFAULT_FALLBACK_COVER;
+                                  }}
+                                />
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-zinc-100 truncate group-hover:text-[#1DB954]">
+                                    {track.title}
+                                  </p>
+                                  <p className="text-[10px] text-zinc-400 truncate">{track.artist}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="text-[10px] font-mono font-bold text-zinc-400 bg-white/5 px-2 py-0.5 rounded-md">
+                                  {formatTime(track.durationSec)}
+                                </span>
+                                <span className="text-xs text-[#1DB954] font-bold bg-[#1DB954]/15 px-3 py-1 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                                  Ascolta ▶️
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-6 text-center bg-black/40 border border-white/10 rounded-2xl">
+                          <p className="text-xs text-zinc-400 mb-2">Nessun brano recente trovato sul tuo profilo Spotify.</p>
+                          <button
+                            onClick={() => setModalTab('catalog')}
+                            className="text-xs text-[#1DB954] font-bold hover:underline"
+                          >
+                            Esplora il catalogo Hit & Consigliati →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center bg-black/40 border border-white/10 rounded-2xl">
+                      <span className="text-3xl block mb-2">🎧</span>
+                      <p className="text-xs font-bold text-zinc-200 mb-1">Collega il tuo account Spotify</p>
+                      <p className="text-xs text-zinc-400 mb-4">
+                        Connettiti per importare automaticamente i tuoi brani recenti e sincronizzare la musica in tempo reale.
+                      </p>
+                      <button
+                        onClick={handleConnectSpotifyLive}
+                        className="bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all shadow-lg active:scale-95"
+                      >
+                        Collega Spotify Ora
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: VERIFIED CATALOGUE */}
+              {modalTab === 'catalog' && (
+                <div>
+                  <div className="mb-3">
+                    <input
+                      type="text"
+                      placeholder="Cerca brano o artista nel catalogo (es. Sfera, Lazza, Billie Eilish)..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 rounded-2xl p-2.5 text-xs text-zinc-100 outline-none focus:ring-2 focus:ring-[#1DB954]/50"
+                    />
+                  </div>
+
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
+                    {DEFAULT_TRACK_CATALOG.filter(
+                      (t) =>
+                        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        t.artist.toLowerCase().includes(searchQuery.toLowerCase())
+                    ).map((track) => (
+                      <div
+                        key={track.id}
+                        onClick={() => handleSelectTrackForSelf(track, true)}
+                        className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-[#1DB954]/10 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={track.coverUrl || DEFAULT_FALLBACK_COVER}
+                            alt={track.title}
+                            referrerPolicy="no-referrer"
+                            className="w-11 h-11 rounded-xl object-cover shrink-0 border border-white/10 shadow-md"
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_FALLBACK_COVER;
+                            }}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-zinc-100 truncate group-hover:text-[#1DB954]">
+                              {track.title}
+                            </p>
+                            <p className="text-[10px] text-zinc-400 truncate">
+                              {track.artist} • <span className="text-[#1DB954]">{track.genre}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] font-mono font-bold text-zinc-400 bg-white/5 px-2 py-0.5 rounded-md">
+                            {formatTime(track.durationSec)}
+                          </span>
+                          <span className="text-xs text-[#1DB954] font-bold bg-[#1DB954]/15 px-3 py-1 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                            Scegli ▶️
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: CUSTOM TRACK FORM */}
+              {modalTab === 'custom' && (
+                <div>
+                  <form
+                    onSubmit={handleSetCustomSong}
+                    className="p-4 bg-black/40 border border-white/10 rounded-2xl space-y-3"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={track.coverUrl || DEFAULT_FALLBACK_COVER}
-                        alt={track.title}
-                        referrerPolicy="no-referrer"
-                        className="w-11 h-11 rounded-xl object-cover shrink-0 border border-white/10 shadow-md"
-                        onError={(e) => {
-                          e.currentTarget.src = DEFAULT_FALLBACK_COVER;
-                        }}
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-zinc-100 truncate group-hover:text-[#1DB954]">
-                          {track.title}
-                        </p>
-                        <p className="text-[10px] text-zinc-400 truncate">{track.artist}</p>
+                    <p className="text-xs font-bold text-zinc-200">
+                      Inserisci qualsiasi brano personalizzato:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider font-bold text-zinc-400 block mb-1">
+                          Titolo del brano
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="es. CALCOLATRICI"
+                          value={customSongTitle}
+                          onChange={(e) => setCustomSongTitle(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 text-xs text-zinc-100 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-[#1DB954]/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider font-bold text-zinc-400 block mb-1">
+                          Artista
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="es. Sfera Ebbasta"
+                          value={customSongArtist}
+                          onChange={(e) => setCustomSongArtist(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 text-xs text-zinc-100 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-[#1DB954]/50"
+                        />
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-xs text-[#1DB954] font-bold bg-[#1DB954]/15 px-3 py-1 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
-                        Scegli ▶️
-                      </span>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={startImmediatelyOnSelect}
+                          onChange={(e) => setStartImmediatelyOnSelect(e.target.checked)}
+                          className="rounded accent-[#1DB954]"
+                        />
+                        <span>Avvia subito in riproduzione su SpotiShare</span>
+                      </label>
                     </div>
-                  </div>
-                ))}
-              </div>
 
-              {/* Custom Track Form */}
-              <form
-                onSubmit={handleSetCustomSong}
-                className="p-3 bg-black/40 border border-white/10 rounded-2xl space-y-2"
-              >
-                <p className="text-[10px] uppercase tracking-wider font-bold text-zinc-400">
-                  Oppure inserisci brano personalizzato:
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Titolo esatto (es. CALCOLATRICI)"
-                    value={customSongTitle}
-                    onChange={(e) => setCustomSongTitle(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 text-xs text-zinc-100 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-[#1DB954]/50"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Artista (es. Sfera Ebbasta)"
-                    value={customSongArtist}
-                    onChange={(e) => setCustomSongArtist(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 text-xs text-zinc-100 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-[#1DB954]/50"
-                  />
+                    <button
+                      type="submit"
+                      disabled={!customSongTitle.trim()}
+                      className="w-full bg-gradient-to-r from-[#1DB954] to-emerald-400 text-black font-extrabold py-2.5 rounded-xl text-xs hover:scale-[1.01] transition-all disabled:opacity-40 shadow-md"
+                    >
+                      Imposta questo brano per il tuo profilo
+                    </button>
+                  </form>
                 </div>
-                <div className="flex items-center gap-2 pt-1">
-                  <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={startImmediatelyOnSelect}
-                      onChange={(e) => setStartImmediatelyOnSelect(e.target.checked)}
-                      className="rounded accent-[#1DB954]"
-                    />
-                    <span>Avvia subito in riproduzione (In ascolto ora)</span>
-                  </label>
-                </div>
+              )}
+
+              {/* Modal Footer */}
+              <div className="mt-4 pt-3 border-t border-white/10 flex justify-end">
                 <button
-                  type="submit"
-                  disabled={!customSongTitle.trim()}
-                  className="w-full bg-gradient-to-r from-[#1DB954] to-emerald-400 text-black font-extrabold py-2 rounded-xl text-xs hover:scale-[1.01] transition-all disabled:opacity-40"
+                  onClick={() => setShowSongPickerModal(false)}
+                  className="px-5 py-2 bg-white/10 hover:bg-white/15 text-zinc-300 hover:text-white font-bold rounded-xl text-xs transition-all"
                 >
-                  Imposta questo brano per il tuo profilo
+                  Chiudi
                 </button>
-              </form>
-            </div>
-
-            <div className="mt-3 pt-3 border-t border-white/10 flex justify-end">
-              <button
-                onClick={() => setShowSongPickerModal(false)}
-                className="px-5 py-2 bg-white/10 hover:bg-white/15 text-zinc-300 hover:text-white font-bold rounded-xl text-xs transition-all"
-              >
-                Chiudi
-              </button>
+              </div>
             </div>
           </div>
         </div>
