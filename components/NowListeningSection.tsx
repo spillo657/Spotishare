@@ -211,6 +211,9 @@ export default function NowListeningSection({
   const audioContextRef = useRef<AudioContext | null>(null);
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Manual Selection lock ref to prevent background idle polling from wiping user-selected tracks
+  const lastManualTrackSetRef = useRef<{ trackId: string; timestamp: number } | null>(null);
+
   // Supabase Realtime Channel & State Refs for instant multi-user synchronization
   const channelRef = useRef<any>(null);
   const myCurrentStateRef = useRef<{
@@ -415,7 +418,7 @@ export default function NowListeningSection({
     };
   }, []);
 
-  // Real-time Spotify API polling with high reactivity & automatic group broadcast
+  // Real-time Spotify API polling with high reactivity & smart manual-selection preservation
   const pollServerSpotifyStatus = useCallback(async (isManual: boolean = false) => {
     if (isManual) setIsRefreshing(true);
     try {
@@ -441,6 +444,8 @@ export default function NowListeningSection({
 
         if (data.is_playing && data.track) {
           // Live Spotify playback detected!
+          lastManualTrackSetRef.current = null; // Clear manual lock as real audio stream is verified
+
           setActivities((prev) =>
             prev.map((act) => {
               if (act.isSelf) {
@@ -461,24 +466,29 @@ export default function NowListeningSection({
           broadcastMyState(data.track, true, data.progressSec || 0, data.device || 'Spotify Device');
 
         } else {
-          // Spotify is stopped or paused -> STRICTLY SET NO_TRACK
-          setActivities((prev) =>
-            prev.map((act) => {
-              if (act.isSelf) {
-                return {
-                  ...act,
-                  isPlaying: false,
-                  track: NO_TRACK,
-                  lastPlayedText: 'Nessun brano in esecuzione',
-                  progressSec: 0
-                };
-              }
-              return act;
-            })
-          );
+          // Spotify is stopped or paused on server
+          // If the user recently selected a track manually on SpotiShare, preserve it instead of wiping it after 2s!
+          const hasManualLock = lastManualTrackSetRef.current && (Date.now() - lastManualTrackSetRef.current.timestamp < 120000);
 
-          if (myCurrentStateRef.current?.isPlaying) {
-            broadcastMyState(NO_TRACK, false, 0, 'Spotify');
+          if (!hasManualLock) {
+            setActivities((prev) =>
+              prev.map((act) => {
+                if (act.isSelf && act.isPlaying) {
+                  return {
+                    ...act,
+                    isPlaying: false,
+                    track: NO_TRACK,
+                    lastPlayedText: 'Nessun brano in esecuzione',
+                    progressSec: 0
+                  };
+                }
+                return act;
+              })
+            );
+
+            if (myCurrentStateRef.current?.isPlaying) {
+              broadcastMyState(NO_TRACK, false, 0, 'Spotify');
+            }
           }
         }
       } else {
@@ -574,27 +584,37 @@ export default function NowListeningSection({
     }
   };
 
-  // Initialize member listening states: default strictly to NO_TRACK unless confirmed live playing
+  // Safe Member State Merging: preserves existing playback and selected tracks on dashboard re-renders
   useEffect(() => {
     if (!members || members.length === 0) return;
 
-    const newActivities: MemberActivity[] = members.map((member, index) => {
-      const isSelf = checkIsSelf(member, index);
+    setActivities((prev) => {
+      return members.map((member, index) => {
+        const isSelf = checkIsSelf(member, index);
+        const existing = prev.find((a) => a.memberId === member.id);
 
-      return {
-        memberId: member.id,
-        memberName: member.name || (isSelf ? 'Tu' : `Membro #${index + 1}`),
-        memberEmail: member.email || '',
-        isSelf,
-        isPlaying: false,
-        track: NO_TRACK,
-        progressSec: 0,
-        lastPlayedText: 'Nessun brano in esecuzione',
-        device: isSelf ? 'Spotify su iPhone' : DEVICES[index % DEVICES.length]
-      };
+        if (existing) {
+          return {
+            ...existing,
+            memberName: member.name || existing.memberName,
+            memberEmail: member.email || existing.memberEmail,
+            isSelf
+          };
+        }
+
+        return {
+          memberId: member.id,
+          memberName: member.name || (isSelf ? 'Tu' : `Membro #${index + 1}`),
+          memberEmail: member.email || '',
+          isSelf,
+          isPlaying: false,
+          track: NO_TRACK,
+          progressSec: 0,
+          lastPlayedText: 'Nessun brano in esecuzione',
+          device: isSelf ? 'Spotify su iPhone' : DEVICES[index % DEVICES.length]
+        };
+      });
     });
-
-    setActivities(newActivities);
   }, [members, currentUser, planId, checkIsSelf]);
 
   // Smooth progress advance only when actively playing
@@ -633,6 +653,11 @@ export default function NowListeningSection({
 
     if (onTriggerConfetti) onTriggerConfetti();
     setIsSyncingPlayer(true);
+
+    lastManualTrackSetRef.current = {
+      trackId: targetMember.track.id,
+      timestamp: Date.now()
+    };
 
     // Optimistic UI Update for zero perceived latency
     setActivities((prev) =>
@@ -698,6 +723,8 @@ export default function NowListeningSection({
 
   // Pause playback: immediate optimistic update + API command + Realtime Broadcast
   const handlePauseMyPlayback = async () => {
+    lastManualTrackSetRef.current = null; // Clear manual lock on explicit pause
+
     // Immediate UI feedback
     setActivities((prev) =>
       prev.map((act) => {
@@ -731,6 +758,8 @@ export default function NowListeningSection({
 
   // Stop playback / Clear track to NO_TRACK
   const handleStopMyPlayback = () => {
+    lastManualTrackSetRef.current = null; // Clear manual lock
+
     setActivities((prev) =>
       prev.map((act) => {
         if (act.isSelf) {
@@ -753,6 +782,11 @@ export default function NowListeningSection({
   // Resume playback or start a selected track
   const handlePlayMyPlayback = async () => {
     const trackToPlay = myActivity?.track?.id !== 'none' ? myActivity.track : DEFAULT_TRACK_CATALOG[0];
+
+    lastManualTrackSetRef.current = {
+      trackId: trackToPlay.id,
+      timestamp: Date.now()
+    };
 
     // Optimistic UI update
     setActivities((prev) =>
@@ -801,6 +835,11 @@ export default function NowListeningSection({
           const nextTrack = nextPlaying ? (act.track.id === 'none' ? DEFAULT_TRACK_CATALOG[0] : act.track) : NO_TRACK;
 
           if (act.isSelf) {
+            if (nextPlaying) {
+              lastManualTrackSetRef.current = { trackId: nextTrack.id, timestamp: Date.now() };
+            } else {
+              lastManualTrackSetRef.current = null;
+            }
             broadcastMyState(nextTrack, nextPlaying, 0, 'Spotify');
           }
 
@@ -893,7 +932,15 @@ export default function NowListeningSection({
     // 1. Immediately close modal for instant feedback
     setShowSongPickerModal(false);
 
-    // 2. Optimistic UI update
+    // 2. Lock this manual selection so polling doesn't wipe it out
+    if (makeActive) {
+      lastManualTrackSetRef.current = {
+        trackId: track.id,
+        timestamp: Date.now()
+      };
+    }
+
+    // 3. Optimistic UI update
     setActivities((prev) =>
       prev.map((act) => {
         if (act.isSelf) {
@@ -909,7 +956,7 @@ export default function NowListeningSection({
       })
     );
 
-    // 3. Broadcast immediately to Admin and all group members
+    // 4. Broadcast immediately to Admin and all group members
     broadcastMyState(track, makeActive, 0, 'Spotify Web');
 
     showToast(
@@ -920,7 +967,7 @@ export default function NowListeningSection({
     );
     if (onTriggerConfetti) onTriggerConfetti();
 
-    // 4. If makeActive, send Spotify play command in background
+    // 5. If makeActive, send Spotify play command in background
     if (makeActive) {
       const trackId = track.spotifyUrl.includes('/track/')
         ? track.spotifyUrl.split('/track/')[1].split('?')[0]
@@ -936,7 +983,7 @@ export default function NowListeningSection({
         setTimeout(() => pollServerSpotifyStatus(), 300);
         setTimeout(() => pollServerSpotifyStatus(), 1200);
       } catch (e) {
-        console.warn('API Play error:', e);
+        console.warn('Play API error:', e);
       }
     }
   };
@@ -1460,30 +1507,31 @@ export default function NowListeningSection({
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-150 overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 md:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150 overflow-hidden"
           onClick={() => setShowSongPickerModal(false)}
         >
           <div
-            className="bg-[#121218] border border-white/15 rounded-3xl p-6 sm:p-7 shadow-2xl max-w-xl w-full relative overflow-hidden ring-1 ring-white/10 max-h-[90vh] flex flex-col justify-between my-auto"
+            className="bg-[#121218] border border-white/15 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[88vh] sm:max-h-[82vh] flex flex-col relative overflow-hidden ring-1 ring-white/10 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-emerald-400" />
+            {/* Emerald Top Accent */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#1DB954] to-emerald-400 shrink-0" />
 
-            <div className="flex flex-col">
-              {/* Modal Header */}
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-xl font-extrabold text-zinc-100 flex items-center gap-2">
+            {/* STICKY HEADER */}
+            <div className="p-4 sm:p-5 border-b border-white/10 shrink-0 bg-[#121218]/95 backdrop-blur-sm space-y-3">
+              <div className="flex justify-between items-start gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-xl font-extrabold text-zinc-100 flex items-center gap-2 truncate">
                     <span>🎧</span> I tuoi brani e catalogo Spotify
                   </h3>
-                  <p className="text-xs text-zinc-400 mt-1">
+                  <p className="text-xs text-zinc-400 mt-0.5 truncate">
                     Scegli un brano da ascoltare o imposta il tuo stato SpotiShare.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowSongPickerModal(false)}
-                  className="text-zinc-400 hover:text-white p-2 rounded-2xl hover:bg-white/10 text-base transition-colors cursor-pointer"
+                  className="text-zinc-400 hover:text-white p-1.5 sm:p-2 rounded-xl hover:bg-white/10 text-base transition-colors cursor-pointer shrink-0"
                   aria-label="Chiudi finestra"
                 >
                   ✕
@@ -1491,10 +1539,10 @@ export default function NowListeningSection({
               </div>
 
               {/* Quick Action: Reset to "Nessun brano in esecuzione" */}
-              <div className="flex items-center justify-between gap-3 mb-4 p-3 bg-white/5 border border-white/10 rounded-2xl">
-                <div>
-                  <p className="text-xs font-bold text-zinc-200">Non stai ascoltando musica?</p>
-                  <p className="text-[11px] text-zinc-400">Imposta lo stato su &quot;Nessun brano in esecuzione&quot;.</p>
+              <div className="p-2.5 sm:p-3 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-zinc-200 truncate">Non stai ascoltando musica?</p>
+                  <p className="text-[10px] sm:text-[11px] text-zinc-400 truncate">Imposta lo stato su &quot;Nessun brano in esecuzione&quot;.</p>
                 </div>
                 <button
                   type="button"
@@ -1502,58 +1550,61 @@ export default function NowListeningSection({
                     handlePauseMyPlayback();
                     setShowSongPickerModal(false);
                   }}
-                  className="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-xl text-xs transition-all whitespace-nowrap active:scale-95 cursor-pointer"
+                  className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold rounded-xl text-xs transition-all whitespace-nowrap active:scale-95 cursor-pointer shrink-0"
                 >
                   ⏸️ Imposta Inattivo
                 </button>
               </div>
 
               {/* Navigation Tabs */}
-              <div className="flex items-center gap-2 p-1 bg-black/60 rounded-2xl border border-white/10 mb-4">
+              <div className="flex items-center gap-1.5 sm:gap-2 p-1 bg-black/60 rounded-2xl border border-white/10 text-xs">
                 <button
                   type="button"
                   onClick={() => setModalTab('recent')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`flex-1 py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
                     modalTab === 'recent'
                       ? 'bg-white/15 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   <span>🎧</span>
-                  <span>I tuoi brani Spotify</span>
+                  <span className="truncate">Brani Spotify</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setModalTab('catalog')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`flex-1 py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
                     modalTab === 'catalog'
                       ? 'bg-white/15 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   <span>🔥</span>
-                  <span>Hit & Consigliati</span>
+                  <span className="truncate">Hit & Consigliati</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setModalTab('custom')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`flex-1 py-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer truncate ${
                     modalTab === 'custom'
                       ? 'bg-white/15 text-white shadow-sm'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   <span>✨</span>
-                  <span>Cerca / Altro</span>
+                  <span className="truncate">Cerca / Altro</span>
                 </button>
               </div>
+            </div>
 
+            {/* SCROLLABLE BODY */}
+            <div className="p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3 custom-scrollbar">
               {/* TAB 1: RECENT SPOTIFY TRACKS */}
               {modalTab === 'recent' && (
                 <div>
                   {isLiveSpotifyConnected ? (
                     <div>
-                      <div className="flex justify-between items-center mb-2 px-1">
+                      <div className="flex justify-between items-center mb-2.5 px-1">
                         <span className="text-xs font-bold text-zinc-300">Ascoltati di recente sul tuo account</span>
                         <button
                           type="button"
@@ -1566,18 +1617,18 @@ export default function NowListeningSection({
                       </div>
 
                       {isLoadingRecent ? (
-                        <div className="py-10 text-center">
-                          <div className="w-8 h-8 border-2 border-[#1DB954] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                        <div className="py-12 text-center">
+                          <div className="w-8 h-8 border-2 border-[#1DB954] border-t-transparent rounded-full animate-spin mx-auto mb-2.5" />
                           <p className="text-xs text-zinc-400">Caricamento dei tuoi brani da Spotify...</p>
                         </div>
                       ) : recentTracks.length > 0 ? (
-                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1 overscroll-contain">
+                        <div className="space-y-2">
                           {recentTracks.map((track) => (
                             <button
                               key={track.id}
                               type="button"
                               onClick={() => handleSelectTrackForSelf(track, true)}
-                              className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-[#1DB954]/15 active:bg-[#1DB954]/25 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group text-left focus:outline-none focus:ring-2 focus:ring-[#1DB954]/60"
+                              className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-[#1DB954]/15 active:bg-[#1DB954]/25 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group text-left focus:outline-none focus:ring-2 focus:ring-[#1DB954]/60 shadow-sm"
                             >
                               <div className="flex items-center gap-3 min-w-0 pointer-events-none">
                                 <img
@@ -1608,7 +1659,7 @@ export default function NowListeningSection({
                           ))}
                         </div>
                       ) : (
-                        <div className="p-6 text-center bg-black/40 border border-white/10 rounded-2xl">
+                        <div className="p-8 text-center bg-black/40 border border-white/10 rounded-2xl">
                           <p className="text-xs text-zinc-400 mb-2">Nessun brano recente trovato sul tuo profilo Spotify.</p>
                           <button
                             type="button"
@@ -1621,7 +1672,7 @@ export default function NowListeningSection({
                       )}
                     </div>
                   ) : (
-                    <div className="p-6 text-center bg-black/40 border border-white/10 rounded-2xl">
+                    <div className="p-8 text-center bg-black/40 border border-white/10 rounded-2xl">
                       <span className="text-3xl block mb-2">🎧</span>
                       <p className="text-xs font-bold text-zinc-200 mb-1">Collega il tuo account Spotify</p>
                       <p className="text-xs text-zinc-400 mb-4">
@@ -1652,7 +1703,7 @@ export default function NowListeningSection({
                     />
                   </div>
 
-                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1 overscroll-contain">
+                  <div className="space-y-2">
                     {DEFAULT_TRACK_CATALOG.filter(
                       (t) =>
                         t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1662,7 +1713,7 @@ export default function NowListeningSection({
                         key={track.id}
                         type="button"
                         onClick={() => handleSelectTrackForSelf(track, true)}
-                        className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-[#1DB954]/15 active:bg-[#1DB954]/25 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group text-left focus:outline-none focus:ring-2 focus:ring-[#1DB954]/60"
+                        className="w-full flex items-center justify-between p-3 bg-white/5 hover:bg-[#1DB954]/15 active:bg-[#1DB954]/25 border border-white/5 hover:border-[#1DB954]/40 rounded-2xl cursor-pointer transition-all group text-left focus:outline-none focus:ring-2 focus:ring-[#1DB954]/60 shadow-sm"
                       >
                         <div className="flex items-center gap-3 min-w-0 pointer-events-none">
                           <img
@@ -1702,12 +1753,12 @@ export default function NowListeningSection({
                 <div>
                   <form
                     onSubmit={handleSetCustomSong}
-                    className="p-4 bg-black/40 border border-white/10 rounded-2xl space-y-3"
+                    className="p-4 sm:p-5 bg-black/40 border border-white/10 rounded-2xl space-y-3.5"
                   >
                     <p className="text-xs font-bold text-zinc-200">
                       Inserisci qualsiasi brano personalizzato:
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="text-[10px] uppercase tracking-wider font-bold text-zinc-400 block mb-1">
                           Titolo del brano
@@ -1758,8 +1809,8 @@ export default function NowListeningSection({
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="mt-4 pt-3 border-t border-white/10 flex justify-end">
+            {/* STICKY FOOTER */}
+            <div className="p-3.5 sm:p-4 border-t border-white/10 bg-[#121218]/95 backdrop-blur-sm shrink-0 flex justify-end">
               <button
                 type="button"
                 onClick={() => setShowSongPickerModal(false)}
