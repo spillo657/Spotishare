@@ -1469,7 +1469,7 @@ export default function Dashboard() {
                                                 <button
                                                     onClick={() => {
                                                         setIsEditingAddress(!isEditingAddress)
-                                                        if (!isEditingAddress) setAddressInput(familyAddress)
+                                                        if (!isEditingAddress) setAddressInput(familyAddress ?? '')
                                                     }}
                                                     className="text-[10px] text-green-400 hover:text-green-300 font-bold bg-white/5 border border-white/10 px-2.5 py-1 rounded-full"
                                                 >
