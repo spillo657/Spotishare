@@ -49,7 +49,10 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  return response;
+  // Skip proxy for auth routes to prevent interference with OAuth callback cookie handling
+  if (request.nextUrl.pathname.startsWith('/auth')) {
+    return response;
+  }
 }
 
 export const config = {

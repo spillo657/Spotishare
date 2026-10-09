@@ -100,6 +100,28 @@ export default function Dashboard() {
         setNotificationPermission(getNotificationPermission())
 
         if (userPlanId && typeof window !== 'undefined') {
+            // Sync settings con API prima di ricorrere a localStorage
+            fetch(`/api/plan/settings?planId=${userPlanId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.settings) {
+                        if (data.settings.cardDetails) {
+                            setCardDetails(data.settings.cardDetails);
+                            localStorage.setItem(`spotishare_cards_${userPlanId}`, JSON.stringify(data.settings.cardDetails));
+                        }
+                        if (data.settings.familyAddress) {
+                            setFamilyAddress(data.settings.familyAddress);
+                            localStorage.setItem(`spotishare_address_${userPlanId}`, data.settings.familyAddress);
+                        }
+                        if (data.settings.playlistUrl) {
+                            setPlaylistUrl(data.settings.playlistUrl);
+                            localStorage.setItem(`spotishare_playlist_${userPlanId}`, data.settings.playlistUrl);
+                        }
+                    }
+                })
+                .catch(e => console.error("Error fetching settings:", e));
+
+            // Caricamento da localStorage (fallback/iniziale)
             const savedCards = localStorage.getItem(`spotishare_cards_${userPlanId}`)
             if (savedCards) {
                 try {
