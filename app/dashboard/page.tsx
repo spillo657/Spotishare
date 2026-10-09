@@ -1506,7 +1506,7 @@ export default function Dashboard() {
                                     </div>
 
                                     <button
-                                        onClick={() => copyToClipboard(familyAddress, 'Indirizzo')}
+                                        onClick={() => copyToClipboard(familyAddress ?? '', 'Indirizzo')}
                                         className="w-full bg-white/5 hover:bg-white/10 border border-white/15 text-zinc-200 hover:text-white font-bold py-2.5 rounded-xl transition-all text-xs flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
                                     >
                                         <span>📋</span> Copia Indirizzo per Spotify
