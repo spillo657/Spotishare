@@ -68,18 +68,18 @@ export default function Dashboard() {
     const [showPaymentCardsModal, setShowPaymentCardsModal] = useState(false)
     const [isEditingCards, setIsEditingCards] = useState(false)
     const settingsChannelRef = useRef<any>(null)
-    const [cardDetails, setCardDetails] = useState({
-        holderName: 'Intestatario Gruppo',
-        revolutTag: '@tuorevtag',
-        revolutIban: 'IT00X0000000000000000000000',
-        buddybankIban: 'IT00Y0000000000000000000000',
-        postepayCardNumber: '0000 0000 0000 0000',
-        postepayFiscalCode: 'XXXXXX00X00X000X',
-        bperIban: 'IT00Z0000000000000000000000'
-    })
+    const [cardDetails, setCardDetails] = useState<{
+        holderName?: string;
+        revolutTag?: string;
+        revolutIban?: string;
+        buddybankIban?: string;
+        postepayCardNumber?: string;
+        postepayFiscalCode?: string;
+        bperIban?: string;
+    } | null>(null)
 
     // 5. Indirizzo Spotify Family Condiviso
-    const [familyAddress, setFamilyAddress] = useState<string>('Via Roma 1, 00100 Roma (RM)')
+    const [familyAddress, setFamilyAddress] = useState<string | null>(null)
     const [isEditingAddress, setIsEditingAddress] = useState(false)
     const [addressInput, setAddressInput] = useState('')
     const [buildStamp, setBuildStamp] = useState<{ commitSha: string; env: string; deploymentId: string; dbHostFingerprint: string } | null>(null)

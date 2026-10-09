@@ -34,7 +34,17 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
-    if (!error && data?.session) {
+    if (error) {
+      console.error('Auth exchange error details:', {
+        message: error.message,
+        name: error.name,
+        status: (error as any).status,
+        code: (error as any).code
+      });
+      return NextResponse.redirect(`${origin}/login?error=auth-failed&details=${encodeURIComponent(error.message)}`)
+    }
+
+    if (data?.session) {
       // Final redirect response
       const redirectResponse = NextResponse.redirect(`${origin}${next}`)
 
@@ -68,7 +78,6 @@ export async function GET(request: NextRequest) {
       return redirectResponse
     }
 
-    console.error('Auth exchange error:', error)
     return NextResponse.redirect(`${origin}/login?error=auth-failed`)
   }
 

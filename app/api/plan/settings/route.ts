@@ -82,21 +82,17 @@ export async function GET(request: NextRequest) {
       // Table might not exist yet
     }
 
-    // If not in DB table, check cache or default
+    // If not in DB table, check cache
     if (!settings) {
-      settings = settingsCache.get(planId) || {
-        familyAddress: 'Via Roma 1, 00100 Roma (RM)',
-        cardDetails: {
-          holderName: 'Intestatario Gruppo',
-          revolutTag: '@tuorevtag',
-          revolutIban: 'IT00X0000000000000000000000',
-          buddybankIban: 'IT00Y0000000000000000000000',
-          postepayCardNumber: '0000 0000 0000 0000',
-          postepayFiscalCode: 'XXXXXX00X00X000X',
-          bperIban: 'IT00Z0000000000000000000000'
-        },
-        playlistUrl: 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M'
-      };
+      settings = settingsCache.get(planId) || null;
+    }
+
+    // Return empty object if no settings found (let frontend handle defaults)
+    if (!settings) {
+      return NextResponse.json({
+        success: true,
+        settings: null
+      });
     }
 
     return NextResponse.json({
