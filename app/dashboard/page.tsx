@@ -339,8 +339,8 @@ export default function Dashboard() {
     }
 
     // --- COPIA NEGLI APPUNTI ---
-    const copyToClipboard = (text: string, label: string) => {
-        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+    const copyToClipboard = (text: string | null | undefined, label: string) => {
+        if (text && typeof navigator !== 'undefined' && navigator.clipboard) {
             navigator.clipboard.writeText(text)
             showToast(`📋 ${label} copiato negli appunti!`, 'success')
         }
@@ -1866,35 +1866,35 @@ export default function Dashboard() {
                             <div className="space-y-4 overflow-y-auto pr-1 custom-scrollbar touch-scroll overscroll-contain flex-1">
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Intestatario</label>
-                                    <input type="text" value={cardDetails.holderName} onChange={e => setCardDetails({ ...cardDetails, holderName: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                    <input type="text" value={cardDetails?.holderName ?? ''} onChange={e => setCardDetails({ ...cardDetails, holderName: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div>
                                         <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Revolut Tag</label>
-                                        <input type="text" value={cardDetails.revolutTag} onChange={e => setCardDetails({ ...cardDetails, revolutTag: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                        <input type="text" value={cardDetails?.revolutTag ?? ''} onChange={e => setCardDetails({ ...cardDetails, revolutTag: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
                                     </div>
                                     <div>
                                         <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Revolut IBAN</label>
-                                        <input type="text" value={cardDetails.revolutIban} onChange={e => setCardDetails({ ...cardDetails, revolutIban: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                        <input type="text" value={cardDetails?.revolutIban ?? ''} onChange={e => setCardDetails({ ...cardDetails, revolutIban: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
                                     </div>
                                 </div>
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Buddybank IBAN</label>
-                                    <input type="text" value={cardDetails.buddybankIban} onChange={e => setCardDetails({ ...cardDetails, buddybankIban: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                    <input type="text" value={cardDetails?.buddybankIban ?? ''} onChange={e => setCardDetails({ ...cardDetails, buddybankIban: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div>
                                         <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Postepay Numero Carta (senza IBAN)</label>
-                                        <input type="text" value={cardDetails.postepayCardNumber} onChange={e => setCardDetails({ ...cardDetails, postepayCardNumber: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                        <input type="text" value={cardDetails?.postepayCardNumber ?? ''} onChange={e => setCardDetails({ ...cardDetails, postepayCardNumber: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
                                     </div>
                                     <div>
                                         <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Postepay Codice Fiscale</label>
-                                        <input type="text" value={cardDetails.postepayFiscalCode} onChange={e => setCardDetails({ ...cardDetails, postepayFiscalCode: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                        <input type="text" value={cardDetails?.postepayFiscalCode ?? ''} onChange={e => setCardDetails({ ...cardDetails, postepayFiscalCode: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
                                     </div>
                                 </div>
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">BPER Banca IBAN</label>
-                                    <input type="text" value={cardDetails.bperIban} onChange={e => setCardDetails({ ...cardDetails, bperIban: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
+                                    <input type="text" value={cardDetails?.bperIban ?? ''} onChange={e => setCardDetails({ ...cardDetails, bperIban: e.target.value })} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-zinc-100" />
                                 </div>
                                 <button onClick={saveCardsSettings} className="w-full bg-green-500 text-black font-bold py-3 rounded-xl hover:bg-green-400 transition-all text-xs min-h-[44px]">
                                     Salva Coordinate
@@ -1911,15 +1911,15 @@ export default function Dashboard() {
                                         </div>
                                         <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md font-bold">Istantaneo / Bonifico</span>
                                     </div>
-                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails.holderName}</strong></p>
+                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails?.holderName ?? 'N/A'}</strong></p>
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
-                                            <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.revolutTag}</span>
-                                            <button onClick={() => copyToClipboard(cardDetails.revolutTag, 'Revtag')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia Tag</button>
+                                            <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails?.revolutTag ?? 'N/A'}</span>
+                                            <button onClick={() => copyToClipboard(cardDetails?.revolutTag ?? '', 'Revtag')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia Tag</button>
                                         </div>
                                         <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
-                                            <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.revolutIban}</span>
-                                            <button onClick={() => copyToClipboard(cardDetails.revolutIban, 'IBAN Revolut')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia IBAN</button>
+                                            <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails?.revolutIban ?? 'N/A'}</span>
+                                            <button onClick={() => copyToClipboard(cardDetails?.revolutIban ?? '', 'IBAN Revolut')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia IBAN</button>
                                         </div>
                                     </div>
                                 </div>
@@ -1933,10 +1933,10 @@ export default function Dashboard() {
                                         </div>
                                         <span className="text-[10px] text-zinc-300 bg-white/10 px-2 py-0.5 rounded-md font-bold">Bonifico SEPA</span>
                                     </div>
-                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails.holderName}</strong></p>
+                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails?.holderName ?? 'N/A'}</strong></p>
                                     <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
-                                        <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.buddybankIban}</span>
-                                        <button onClick={() => copyToClipboard(cardDetails.buddybankIban, 'IBAN Buddybank')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia IBAN</button>
+                                        <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails?.buddybankIban ?? 'N/A'}</span>
+                                        <button onClick={() => copyToClipboard(cardDetails?.buddybankIban ?? '', 'IBAN Buddybank')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia IBAN</button>
                                     </div>
                                 </div>
 
@@ -1949,21 +1949,21 @@ export default function Dashboard() {
                                         </div>
                                         <span className="text-[10px] text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-md font-bold">Ricarica Carta P2P</span>
                                     </div>
-                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails.holderName}</strong></p>
+                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails?.holderName ?? 'N/A'}</strong></p>
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
                                             <div>
                                                 <span className="text-[9px] uppercase tracking-widest text-zinc-500 block">Numero Carta:</span>
-                                                <span className="text-xs font-mono font-bold text-zinc-100">{cardDetails.postepayCardNumber}</span>
+                                                <span className="text-xs font-mono font-bold text-zinc-100">{cardDetails?.postepayCardNumber ?? 'N/A'}</span>
                                             </div>
-                                            <button onClick={() => copyToClipboard(cardDetails.postepayCardNumber.replace(/\s+/g, ''), 'Numero Postepay')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia Carta</button>
+                                            <button onClick={() => copyToClipboard((cardDetails?.postepayCardNumber ?? '').replace(/\s+/g, ''), 'Numero Postepay')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia Carta</button>
                                         </div>
                                         <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
                                             <div>
                                                 <span className="text-[9px] uppercase tracking-widest text-zinc-500 block">Codice Fiscale:</span>
-                                                <span className="text-xs font-mono font-bold text-zinc-100">{cardDetails.postepayFiscalCode}</span>
+                                                <span className="text-xs font-mono font-bold text-zinc-100">{cardDetails?.postepayFiscalCode ?? 'N/A'}</span>
                                             </div>
-                                            <button onClick={() => copyToClipboard(cardDetails.postepayFiscalCode, 'Codice Fiscale')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia C.F.</button>
+                                            <button onClick={() => copyToClipboard(cardDetails?.postepayFiscalCode ?? '', 'Codice Fiscale')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia C.F.</button>
                                         </div>
                                     </div>
                                 </div>
@@ -1977,10 +1977,10 @@ export default function Dashboard() {
                                         </div>
                                         <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md font-bold">Bonifico Bancario</span>
                                     </div>
-                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails.holderName}</strong></p>
+                                    <p className="text-xs text-zinc-400 mb-2">Intestatario: <strong className="text-zinc-200">{cardDetails?.holderName ?? 'N/A'}</strong></p>
                                     <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-xl border border-white/5">
-                                        <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails.bperIban}</span>
-                                        <button onClick={() => copyToClipboard(cardDetails.bperIban, 'IBAN BPER')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia IBAN</button>
+                                        <span className="text-xs font-mono text-zinc-200 truncate">{cardDetails?.bperIban ?? 'N/A'}</span>
+                                        <button onClick={() => copyToClipboard(cardDetails?.bperIban ?? '', 'IBAN BPER')} className="text-[10px] bg-white/10 hover:bg-green-500 hover:text-black font-bold px-3 py-1.5 rounded-lg transition-all ml-2 shrink-0 min-h-[36px]">Copia IBAN</button>
                                     </div>
                                 </div>
 
