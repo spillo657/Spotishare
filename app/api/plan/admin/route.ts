@@ -54,6 +54,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: userError.message }, { status: 500 });
       }
 
+      // Create default group_settings row for the new plan (uses DB defaults from schema)
+      const { error: settingsError } = await supabase
+        .from('group_settings')
+        .insert({ plan_id: newPlan.id });
+
+      if (settingsError) {
+        // Log but don't fail the plan creation - settings can be created later via POST
+        console.error('Failed to create default group_settings:', settingsError);
+      }
+
       return NextResponse.json({
         success: true,
         plan: newPlan

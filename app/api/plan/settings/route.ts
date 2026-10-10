@@ -20,7 +20,7 @@ export interface GroupSettings {
   playlistUrl?: string;
 }
 
-// In-memory / DB fallback cache to guarantee availability even before migrations are run
+// In-memory cache for POST to avoid extra DB reads during sanitization
 const settingsCache = new Map<string, GroupSettings>();
 
 export async function GET(request: NextRequest) {
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       }, { status: 403 });
     }
 
-    // Try fetching from group_settings table if it exists
+    // Fetch from group_settings table
     let settings: GroupSettings | null = null;
     try {
       const { data: dbSettings, error: dbError } = await supabase
@@ -82,12 +82,7 @@ export async function GET(request: NextRequest) {
       // Table might not exist yet
     }
 
-    // If not in DB table, check cache
-    if (!settings) {
-      settings = settingsCache.get(planId) || null;
-    }
-
-    // Return empty object if no settings found (let frontend handle defaults)
+    // Database is the single source of truth
     if (!settings) {
       return NextResponse.json({
         success: true,
@@ -148,8 +143,27 @@ export async function POST(request: NextRequest) {
       }, { status: 403 });
     }
 
+    // Fetch existing settings from DB to preserve unspecified fields
+    let existing: GroupSettings = {};
+    try {
+      const { data: dbSettings, error: dbError } = await supabase
+        .from('group_settings')
+        .select('family_address, card_details, playlist_url')
+        .eq('plan_id', planId)
+        .maybeSingle();
+
+      if (!dbError && dbSettings) {
+        existing = {
+          familyAddress: dbSettings.family_address,
+          cardDetails: dbSettings.card_details,
+          playlistUrl: dbSettings.playlist_url,
+        };
+      }
+    } catch {
+      // Table might not exist, use empty object
+    }
+
     // Sanitize and construct verified settings
-    const existing = settingsCache.get(planId) || {};
     const sanitizedSettings: GroupSettings = {
       familyAddress: typeof familyAddress === 'string' ? familyAddress.trim().slice(0, 255) : (existing.familyAddress || ''),
       cardDetails: cardDetails ? {
@@ -164,10 +178,10 @@ export async function POST(request: NextRequest) {
       playlistUrl: typeof playlistUrl === 'string' ? playlistUrl.trim().slice(0, 300) : (existing.playlistUrl || '')
     };
 
-    // Update in-memory / session store
+    // Update in-memory cache for subsequent requests
     settingsCache.set(planId, sanitizedSettings);
 
-    // Persist to group_settings table if available
+    // Persist to group_settings table
     try {
       await supabase
         .from('group_settings')
@@ -178,8 +192,13 @@ export async function POST(request: NextRequest) {
           playlist_url: sanitizedSettings.playlistUrl,
           updated_at: new Date().toISOString()
         }, { onConflict: 'plan_id' });
-    } catch {
-      // Ignore if table not yet migrated
+    } catch (dbError) {
+      console.error('Failed to persist group_settings:', dbError);
+      return NextResponse.json({
+        success: false,
+        error: 'DATABASE_ERROR',
+        message: 'Errore durante il salvataggio delle impostazioni nel database'
+      }, { status: 500 });
     }
 
     return NextResponse.json({
